@@ -4,7 +4,6 @@ import argparse
 import sys
 import os
 
-
 class Variable:
     def __init__(self, frame, name, frames):
         self.value = None
@@ -39,26 +38,32 @@ class Frames:
         self.temp = None
         self.glob = {}
 
-    def create_local_frame(self):
-        self.local.insert(0, {})
 
     def createframe(self):
         self.temp = {}
 
-    def check_temp(self):
-        if self.temp is None:
-            return False
-
     def add_to_temp(self, variable):
+        if self.temp is None:
+            print("empty temporary", file=sys.stderr)
+            exit(55)
         self.temp[variable.name] = variable
 
     def add_to_glob(self, variable):
         self.glob[variable.name] = variable
 
     def pushframe(self):
+        if self.temp is None:
+            print("empty temporary", file=sys.stderr)
+            exit(55)
+
         self.local.insert(0, self.temp)
+        self.temp = None
 
     def popframe(self):
+        if self.temp is None:
+            print("empty temporary", file=sys.stderr)
+            exit(55)
+
         self.temp = self.local[0]
         del self.local[0]
 
@@ -78,14 +83,14 @@ class Frames:
         return False
 
     def can_access(self, name):
-        if self.temp is not None and name in self.temp:   # in temporary
+        if self.temp is not None and name in self.temp:  # in temporary
             return True
         elif name in self.glob:  # in global
             return True
-        elif name in self.local: # in the top local frame
+        elif name in self.local:  # in the top local frame
             return True
         else:
-           return False
+            return False
 
     def get_value(self, name, frame):
         if frame == 'GF':
@@ -96,18 +101,18 @@ class Frames:
             return self.temp[name]
         else:
             print("wrong frame", file=sys.stderr)
-            exit(1)  # todo
+            exit(32)  # todo
 
     def set_value(self, frame, name, value):
         if frame == 'GT' and name in self.glob:
             self.glob[name].set_value(value)
         elif frame == 'LF' and name in self.local:
             self.local[0][name].set_value(value)
-        elif frame == 'TF'  and name in self.temp:
+        elif frame == 'TF' and name in self.temp:
             self.temp[name].set_value(value)
         else:
             print("wrong frame", file=sys.stderr)
-            exit(1)  # todo
+            exit(32)  # todo
 
 
 class Operand:
@@ -118,7 +123,7 @@ class Operand:
 
 
 class Instruction:
-    def __init__(self, order, opcode, operands, frames, labels, input_file, in_list, datastack):
+    def __init__(self, order, opcode, operands, frames, labels, input_file, datastack):
         self.order = order
         self.opcode = opcode
         self.operands = operands
@@ -126,27 +131,45 @@ class Instruction:
         self.frames = frames
         self.labels = labels
         self.input = input_file
-        self.list = in_list
+
         self.expected = None  # expected types of arguments
 
     def check_operands(self):
         # self.debug()
         i = 0
+
+        op_count = 0
+        for j in self.operands:
+            if j is not None:
+                op_count += 1
+
+        if op_count != len(self.expected):
+            print("wrong operand count", file=sys.stderr)
+            exit(32)
+
         for o in self.operands:
             if o is not None:
-                if self.expected[i] == 'symb' and (
+                if self.expected[i] != 'symb' and (
                         self.operands[i].type == 'int' or self.operands[i].type == 'string'
                         or self.operands[i].type == 'bool' or self.operands[i].type == 'var'
                         or self.operands[i].type == 'nil'):
-                    continue
-
-                if self.expected[i] != self.operands[i].type:
                     print("wrong operand type", file=sys.stderr)
-                    exit(1)  # todo
+                    exit(53)  # todo
+                else:
+                    if self.expected[i] != self.operands[i].type:
+                        print("wrong operand type here", file=sys.stderr)
+                        exit(53)  # todo
 
-                if (self.opcode != 'DEFVAR' or self.opcode != 'TYPE') and o.type == 'var' and not self.frames.can_access(o.value):
+                if (self.opcode != 'DEFVAR' or self.opcode != 'TYPE') and o.type == 'var' and (
+                not self.frames.can_access(o.value)):
                     print("can not access the variable in operand", file=sys.stderr)  # no access to first
-                    exit(1)  # todo
+                    exit(55)  # todo
+
+                if (self.opcode != 'DEFVAR' or self.opcode != 'TYPE') and o.type == 'var' and not self.frames.exists(
+                        o.value):
+                    print("can not access the variable in operand", file=sys.stderr)  # no access to first
+                    exit(54)  # todo
+
 
     def debug(self):
         print(self.opcode)
@@ -172,9 +195,11 @@ class Instruction:
                 self.check_operands()
                 if self.operands[1].type == 'var':
                     value = self.frames.get_value(self.operands[0].value, self.operands[0].frame)
-                    self.frames.set_value(self.operands[0].frame, self.operands[0].value, value)  # asign variable to the first operand
+                    self.frames.set_value(self.operands[0].frame, self.operands[0].value,
+                                          value)  # asign variable to the first operand
                 else:
-                    self.frames.set_value(self.operands[0].frame, self.operands[0].value, self.operands[1].value)  # asign constant to first operand
+                    self.frames.set_value(self.operands[0].frame, self.operands[0].value,
+                                          self.operands[1].value)  # asign constant to first operand
 
             case 'CREATEFRAME':
                 self.expected = []
@@ -204,7 +229,7 @@ class Instruction:
                         self.frames.add_to_temp(var)
                     else:
                         print("error can add v ar only to tf or gf ", file=sys.stderr)
-                        exit(1)  # todo
+                        exit(32)  # todo
 
             case 'CALL':
                 self.expected = ['label']
@@ -218,7 +243,8 @@ class Instruction:
                 self.expected = ['symb']
                 self.check_operands()
                 if self.operands[0].type == 'var':  # pushing variable
-                    value = self.frames.get_value(self.operands[0].value, self.operands[0].frame)  # get value of variable
+                    value = self.frames.get_value(self.operands[0].value,
+                                                  self.operands[0].frame)  # get value of variable
                     self.datastack.insert(0, value)
                 else:
                     self.datastack.insert(0, self.operands[0].value)  # push directly value of constant
@@ -254,7 +280,7 @@ class Instruction:
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
 
-                result = value1*value2
+                result = value1 * value2
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
             case 'IDIV':
@@ -263,6 +289,10 @@ class Instruction:
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
 
+                if value2 == 0:
+                    print("zero division", file=sys.stderr)
+                    exit(57)
+
                 result = value1 // value2
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
@@ -270,7 +300,7 @@ class Instruction:
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
 
-                if self.operands[1].type =='nil' or self.operands[2].type =='nil':
+                if self.operands[1].type == 'nil' or self.operands[2].type == 'nil':
                     print("nil in lower", file=sys.stderr)
                     exit(53)
 
@@ -382,9 +412,14 @@ class Instruction:
                 self.expected = ['var', 'type']
                 self.check_operands()
 
+                input()
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, value)
+
             case 'WRITE':
                 self.expected = ['symb']
                 self.check_operands()
+
+                print(self.operands[0].value, end="")
 
             case 'CONCAT':
                 self.expected = ['var', 'symb', 'symb']
@@ -408,7 +443,6 @@ class Instruction:
 
                 result = len(value1)
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
-
 
             case 'GETCHAR':
                 self.expected = ['var', 'symb', 'symb']
@@ -437,13 +471,11 @@ class Instruction:
                     exit(53)
 
                 var[symb1] = symb2[0]
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value,var)
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, var)
 
             case 'TYPE':
                 self.expected = ['var', 'symb']
                 self.check_operands()
-
-
 
             case 'LABEL':
                 self.expected = ['label']
@@ -465,6 +497,12 @@ class Instruction:
                 self.expected = ['symb']
                 self.check_operands()
 
+                value1 = self.get_op_val(1)
+                if value1 < 0 or value1 > 49:
+                    exit(57)
+
+                exit(value1)
+
             case 'DPRINT':
                 self.expected = ['symb']
                 self.check_operands()
@@ -472,6 +510,10 @@ class Instruction:
             case 'BREAK':
                 self.expected = []
                 self.check_operands()
+
+            case _:
+                print("wrong opcode", file=sys.stderr)
+                exit(32)
 
 
 class Read_source:
@@ -489,7 +531,7 @@ class Read_source:
             self.root = xml.getroot()
         except ET.ParseError:
             print("error while reading xml", file=sys.stderr)
-            exit(1)  # todo
+            exit(31)  # todo
 
     def check(self):
 
@@ -497,40 +539,44 @@ class Read_source:
             if self.root.attrib['language'].upper() != "IPPcode23".upper():  # name a description nekotroluju kdyz
                 # jsou volitelne
                 print("error while reading xml", file=sys.stderr)
-                exit(1)  # todo
+                exit(32)  # todo
         except KeyError:
             print("error while reading xml", file=sys.stderr)
-            exit(1)  # todo
+            exit(31)  # todo
 
         for child in self.root:
             if child.tag != 'instruction':
                 print("chyba v xml", file=sys.stderr)
-                exit(1)
+                exit(32)
+            if int(child.attrib['order']) < 1:
+                print("negative order", file=sys.stderr)
+                exit(32)
 
             child_at = child.attrib
             if len(child_at) != 2 or ('opcode' not in child_at or 'order' not in child_at):
                 print("chyba v xml", file=sys.stderr)
-                exit(1)
+                exit(32)
 
             for number, arg in enumerate(child, 1):
                 try:
                     if not re.match('^arg[123]$', arg.tag) or number > 3:
                         print("spatny argument", file=sys.stderr)
-                        exit(1)
+                        exit(32)
                 except KeyError:
                     print("error while checking arguments", file=sys.stderr)
-                    exit(1)  # todo
+                    exit(31)  # todo
 
     def fill_list(self):
 
         instruction_list = []
         for child in self.root:
+
             opcode = child.attrib['opcode']
             operands = [None] * 3
             order = child.attrib['order']
             for i, subchild in enumerate(child, 1):
                 if subchild.tag == 'arg1':
-                    if subchild.attrib['type'] =='var':
+                    if subchild.attrib['type'] == 'var':
                         if '@' in subchild.text:
                             frame, value = subchild.text.split('@')
                         else:
@@ -565,11 +611,22 @@ class Read_source:
                         operands[2] = Operand(subchild.attrib['type'], subchild.text, None)
                 else:
                     print("error while loading operands", file=sys.stderr)
-                    exit(1)
+                    exit(31)
 
-            new_int = Instruction(order, opcode, operands, self.frames,  self.labels, self.input_file, instruction_list, self.datastack,)
+            new_int = Instruction(order, opcode, operands, self.frames, self.labels, self.input_file,
+                                  self.datastack, )
             instruction_list.append(new_int)
-        instruction_list.sort(key=lambda x: x.order)
+
+            order_arr = []
+            for i in instruction_list:
+                if i.order not in order_arr:
+                    order_arr.append(i.order)
+                else:
+                    print("duplicate order", file=sys.stderr)
+                    exit(32)
+
+            instruction_list.sort(key=lambda x: x.order)
+
         return instruction_list
 
 
@@ -591,7 +648,7 @@ class Interpreter:
         self.in_list = xml.fill_list()
         i = 0
         while i < len(self.in_list):
-            #print(self.frames.glob)
+            # print(self.frames.glob)
             instruction = self.in_list[i]
             if instruction is None:
                 break
