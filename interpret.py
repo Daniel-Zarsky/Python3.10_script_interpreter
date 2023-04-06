@@ -80,12 +80,12 @@ class Frames:
     def can_access(self, name):
         if self.temp is not None and name in self.temp:   # in temporary
             return True
-        if name in self.glob:  # in global
+        elif name in self.glob:  # in global
             return True
-        if name in self.local[0]: # in the top local frame
+        elif name in self.local: # in the top local frame
             return True
-
-        return False
+        else:
+           return False
 
     def get_value(self, name, frame):
         if frame == 'GF':
@@ -133,15 +133,20 @@ class Instruction:
         # self.debug()
         i = 0
         for o in self.operands:
+            if o is not None:
+                if self.expected[i] == 'symb' and (
+                        self.operands[i].type == 'int' or self.operands[i].type == 'string'
+                        or self.operands[i].type == 'bool' or self.operands[i].type == 'var'
+                        or self.operands[i].type == 'nil'):
+                    continue
 
-            if self.expected[i] == 'symb' and (
-                    self.operands[i].type == 'int' or self.operands[i].type == 'string'
-                    or self.operands[i].type == 'bool' or self.operands[i].type == 'var'):
-                continue
+                if self.expected[i] != self.operands[i].type:
+                    print("wrong operand type", file=sys.stderr)
+                    exit(1)  # todo
 
-            if self.expected[i] != self.operands[i].type:
-                print("wrong operand type", file=sys.stderr)
-                exit(1)  # todo
+                if (self.opcode != 'DEFVAR' or self.opcode != 'TYPE') and o.type == 'var' and not self.frames.can_access(o.value):
+                    print("can not access the variable in operand", file=sys.stderr)  # no access to first
+                    exit(1)  # todo
 
     def debug(self):
         print(self.opcode)
@@ -152,24 +157,24 @@ class Instruction:
                 print(op.type)
                 print(op.value)
 
+    def get_op_val(self, number):
+        if self.operands[number].type == 'var':
+            value = self.frames.get_value(self.operands[number].value, self.operands[1].frame)
+        else:
+            value = self.operands[number].value
+
+        return value
+
     def execute(self):
         match self.opcode.upper():
             case 'MOVE':
                 self.expected = ['var', 'symb']
                 self.check_operands()
-                if self.frames.can_access(self.operands[0].value):  # can we access the first operand
-                    if self.operands[1].type == 'var':
-                        if self.frames.can_access(self.operands[0].value):  # if the second is variable can we access it
-                            value = self.frames.get_value(self.operands[0].value, self.operands[0].frame)
-                            self.frames.set_value(self.operands[0].frame, self.operands[0].value, value)  # asign variable to the first operand
-                        else:
-                            print("can not access the variable", file=sys.stderr)  # no access to second
-                            exit(1)  # todo
-                    else:
-                        self.frames.set_value(self.operands[0].frame, self.operands[0].value, self.operands[1].value)  # asign constant to first operand
+                if self.operands[1].type == 'var':
+                    value = self.frames.get_value(self.operands[0].value, self.operands[0].frame)
+                    self.frames.set_value(self.operands[0].frame, self.operands[0].value, value)  # asign variable to the first operand
                 else:
-                    print("can not access the variable", file=sys.stderr)  # no access to first
-                    exit(1)  # todo
+                    self.frames.set_value(self.operands[0].frame, self.operands[0].value, self.operands[1].value)  # asign constant to first operand
 
             case 'CREATEFRAME':
                 self.expected = []
@@ -212,7 +217,11 @@ class Instruction:
             case 'PUSHS':
                 self.expected = ['symb']
                 self.check_operands()
-
+                if self.operands[0].type == 'var':  # pushing variable
+                    value = self.frames.get_value(self.operands[0].value, self.operands[0].frame)  # get value of variable
+                    self.datastack.insert(0, value)
+                else:
+                    self.datastack.insert(0, self.operands[0].value)  # push directly value of constant
             case 'POPS':
                 self.expected = ['var']
                 self.check_operands()
@@ -223,49 +232,151 @@ class Instruction:
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
 
+                value1 = self.get_op_val(1)
+                value2 = self.get_op_val(2)
+
+                result = value1 + value2
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+
             case 'SUB':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
 
+                value1 = self.get_op_val(1)
+                value2 = self.get_op_val(2)
+
+                result = value1 - value2
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+
             case 'MUL':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
+                value1 = self.get_op_val(1)
+                value2 = self.get_op_val(2)
+
+                result = value1*value2
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
             case 'IDIV':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
+                value1 = self.get_op_val(1)
+                value2 = self.get_op_val(2)
+
+                result = value1 // value2
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
             case 'LT':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
 
+                if self.operands[1].type =='nil' or self.operands[2].type =='nil':
+                    print("nil in lower", file=sys.stderr)
+                    exit(53)
+
+                value1 = self.get_op_val(1)
+                value2 = self.get_op_val(2)
+
+                result = value1 < value2
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+
             case 'GT':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
+
+                if self.operands[1].type == 'nil' or self.operands[2].type == 'nil':
+                    print("nil in greater", file=sys.stderr)
+                    exit(53)
+
+                value1 = self.get_op_val(1)
+                value2 = self.get_op_val(2)
+
+                result = value1 > value2
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
             case 'EQ':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
 
+                value1 = self.get_op_val(1)
+                value2 = self.get_op_val(2)
+
+                result = value1 == value2
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+
             case 'AND':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
+
+                if self.operands[1].type != 'bool' or self.operands[2].type != 'bool':
+                    print("nil in greater", file=sys.stderr)
+                    exit(53)
+
+                value1 = self.get_op_val(1)
+                value2 = self.get_op_val(2)
+
+                result = value1 and value2
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
             case 'OR':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
 
+                if self.operands[1].type != 'bool' or self.operands[2].type != 'bool':
+                    print("nil in greater", file=sys.stderr)
+                    exit(53)
+
+                value1 = self.get_op_val(1)
+                value2 = self.get_op_val(2)
+
+                result = value1 or value2
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+
             case 'NOT':
-                self.expected = ['var', 'symb', 'symb']
+                self.expected = ['var', 'symb']
                 self.check_operands()
+
+                if self.operands[1].type != 'bool':
+                    print("nil in greater", file=sys.stderr)
+                    exit(53)
+
+                value1 = self.get_op_val(1)
+
+                result = not value1
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
             case 'INT2CHAR':
                 self.expected = ['var', 'symb']
                 self.check_operands()
 
+                value1 = self.get_op_val(1)
+
+                try:
+                    result = chr(value1)
+                except ValueError:
+                    print("value out of range", file=sys.stderr)
+                    exit(53)
+
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+
             case 'STRI2INT':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
+                value1 = self.get_op_val(1)
+                value2 = self.get_op_val(2)
+
+                if value2 >= len(value1):
+                    print("value out of range", file=sys.stderr)
+                    exit(53)
+
+                char = value1[value2]
+                try:
+                    result = ord(char)
+                except ValueError:
+                    print("value out of range", file=sys.stderr)
+                    exit(53)
+
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
             case 'READ':
                 self.expected = ['var', 'type']
@@ -279,21 +390,60 @@ class Instruction:
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
 
+                value1 = self.get_op_val(1)
+                value2 = self.get_op_val(2)
+
+                if type(value1) is not str or type(value2) is not str:
+                    print("wrong value for concat", file=sys.stderr)
+                    exit(53)
+
+                result = value1 + value2
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+
             case 'STRLEN':
                 self.expected = ['var', 'symb']
                 self.check_operands()
+
+                value1 = self.get_op_val(1)
+
+                result = len(value1)
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+
 
             case 'GETCHAR':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
 
+                value1 = self.get_op_val(1)
+                value2 = self.get_op_val(2)
+
+                if value2 >= len(value1):
+                    print("value out of range", file=sys.stderr)
+                    exit(53)
+
+                result = value1[value2]
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+
             case 'SETCHAR':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
 
+                var = self.get_op_val(0)
+                symb1 = self.get_op_val(1)
+                symb2 = self.get_op_val(2)
+
+                if symb1 >= len(var) or symb2 is None:
+                    print("value out of range", file=sys.stderr)
+                    exit(53)
+
+                var[symb1] = symb2[0]
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value,var)
+
             case 'TYPE':
                 self.expected = ['var', 'symb']
                 self.check_operands()
+
+
 
             case 'LABEL':
                 self.expected = ['label']
@@ -441,13 +591,13 @@ class Interpreter:
         self.in_list = xml.fill_list()
         i = 0
         while i < len(self.in_list):
-
+            #print(self.frames.glob)
             instruction = self.in_list[i]
             if instruction is None:
                 break
             else:
                 i = i + 1
-                instruction.debug()
+                instruction.execute()
 
 
 parser = argparse.ArgumentParser(
