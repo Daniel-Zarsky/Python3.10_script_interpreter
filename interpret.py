@@ -87,9 +87,11 @@ class Frames:
                 return True
 
             i = 0
-            while i < len(self.local):
-                if name in self.local[i] and i == 0:
-                    return True
+            if len(self.local) != 0:
+                while i < len(self.local):
+                    if name in self.local[i]:
+                        return True
+                    i = i+1
 
             return False
 
@@ -105,7 +107,7 @@ class Frames:
                     return False
 
             elif frame == 'LF':
-                if name in self.local[0]:
+                if name in self.local:
                     return True
                 else:
                     return False
@@ -202,7 +204,7 @@ class Instruction:
                 not self.frames.can_access(self.opcode, o.value, o.frame)):
                    # print('problem here')
                     print("can not access the variable in operand", file=sys.stderr)  # no access to first
-                    exit(55)  # todo
+                    exit(54)  # todo
 
                 if o.type == 'var' and not self.frames.exists(self.opcode, o.value):
                     if self.opcode != 'DEFVAR' and self.opcode != 'TYPE':
@@ -280,8 +282,13 @@ class Instruction:
                 if var.frame == 'GF':
                     if not self.frames.exists(self.opcode, self.operands[0].value):
                         self.frames.add_to_glob(var)
+                    else:
+                        exit(52)
                 elif var.frame == 'TF':
-                    self.frames.add_to_temp(var)
+                    if var not in self.frames.temp:
+                        self.frames.add_to_temp(var)
+                    else:
+                        exit(52)
                 else:
                     print("error can add var only to tf or gf ", file=sys.stderr)
                     exit(32)  # todo
@@ -398,6 +405,10 @@ class Instruction:
                 if int(value2) == 0:
                     print("zero division", file=sys.stderr)
                     exit(57)
+
+                if value1 is None or value2 is None:
+                    print("operand with no value ", file=sys.stderr)
+                    exit(53)
 
                 result = int(value1) // int(value2)
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
@@ -517,9 +528,9 @@ class Instruction:
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
 
-                if value2 >= len(value1):
+                if int(value2) >= len(value1):
                     print("value out of range", file=sys.stderr)
-                    exit(53)
+                    exit(58)
 
                 char = value1[value2]
                 try:
@@ -592,7 +603,9 @@ class Instruction:
                 self.check_operands()
 
                 value1 = self.get_op_val(1)
-
+                if value1 is None:
+                    print("empty string", file=sys.stderr)
+                    exit(53)
                 result = len(value1)
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
@@ -605,7 +618,7 @@ class Instruction:
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
 
-                if value2 >= len(value1):
+                if int(value2) >= len(value1):
                     print("value out of range", file=sys.stderr)
                     exit(53)
 
@@ -622,12 +635,35 @@ class Instruction:
                 symb1 = self.get_op_val(1)
                 symb2 = self.get_op_val(2)
 
-                if symb1 >= len(var) or symb2 is None:
-                    print("value out of range", file=sys.stderr)
+                if symb1 == 'true':
+                    symb1 = 1
+                if symb1 == 'nil':
+                        symb1 = 0
+                if symb2 == 'true':
+                    symb1 = 1
+                    nc = '1'
+                elif symb2 == 'nil':
+                    symb1 = 0
+                    nc = '0'
+                else:
+                    if symb2 is not None:
+                        nc = symb2[0]
+
+                if symb2 is None or symb1 is None or var is None:
+                    print("invalid operands", file=sys.stderr)
                     exit(53)
 
-                var[symb1] = symb2[0]
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, var)
+                if int(symb1) >= len(var):
+                     print("value out of range", file=sys.stderr)
+                     exit(53)
+
+                stra = var
+                posn = int(symb1)
+
+
+                stra = stra[:posn] + nc + stra[posn + 1:]
+                print(stra)
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, stra)
 
                 self.jumper.current += 1
 
@@ -690,6 +726,16 @@ class Instruction:
                     print("non existing label", file=sys.stderr)
                     exit(52)
 
+                if self.operands[1].type != self.operands[2].type:
+                    print("incompatible types", file=sys.stderr)
+                    exit(53)
+
+                if self.operands[1].type == 'bool':
+                    if symb1 == 'true':
+                     symb1 = 1
+                    else:
+                     symb1 = 0
+
                 if int(symb1) == int(symb2):
 
                     self.jumper.current = self.jumper.labels[label_name]
@@ -707,6 +753,16 @@ class Instruction:
                 if label_name not in self.jumper.labels:
                     print("non existing label", file=sys.stderr)
                     exit(52)
+
+                if self.operands[1].type != self.operands[2].type:
+                    print("incompatible types", file=sys.stderr)
+                    exit(53)
+
+                if self.operands[1].type == 'bool':
+                    if symb1 == 'true':
+                     symb1 = 1
+                    else:
+                     symb1 = 0
 
                 if int(symb1) != int(symb2):
                     self.jumper.current = self.jumper.labels[label_name]
@@ -754,11 +810,18 @@ class Read_source:
         self.jumper = jumper
 
     def load(self):
-        try:
-            parser = ET.parse(self.source)
-        except ET.ParseError:
-            print("error while reading xml", file=sys.stderr)
-            exit(31)  # todo
+        if self.source is None:
+            try:
+                parser = ET.parse(sys.stdin.buffer)
+            except ET.ParseError:
+                print("error while reading xml", file=sys.stderr)
+                exit(31)  # todo
+        else:
+            try:
+                parser = ET.parse(self.source)
+            except ET.ParseError:
+                print("error while reading xml", file=sys.stderr)
+                exit(31)  # todo
 
         self.root = parser.getroot()
 
@@ -772,7 +835,7 @@ class Read_source:
                 print("error while reading xml", file=sys.stderr)
                 exit(32)  # todo
         except KeyError:
-            print("error while reading xml", file=sys.stderr)
+            print("error while reading xml v hlavicce", file=sys.stderr)
             exit(31)  # todo
 
         for child in self.root:
@@ -906,9 +969,11 @@ class Interpreter:
         #print(jumper.labels)
 
         while jumper.current < len(self.in_list):
+
             #self.frames.debug()
             #print(self.datastack)
             instruction = self.in_list[jumper.current]
+            #print(instruction.opcode, file=sys.stderr)
             #print(instruction.opcode)
             if instruction is None:
                 break
@@ -926,17 +991,14 @@ parser.add_argument('--input', action='store', dest='input_file',
                     help='soubor se vstupy pro samotnou interpretaci')
 args = parser.parse_args()
 
-if (args.input_file is None) and (args.source_file is None):  # source and input missing
-    print("invalid argument or forbidden combination of arguments", file=sys.stderr)
-    sys.exit(10)
+if args.source_file is not None and args.input_file is not None:
+    if args.source_file:
+        if not os.path.isfile(args.source_file):
 
-if args.source_file:
-    if not os.path.isfile(args.source_file):
-
-        exit(11)
-if args.input_file:
-    if not os.path.isfile(args.input_file):
-        exit(11)
+            exit(11)
+    if args.input_file:
+        if not os.path.isfile(args.input_file):
+            exit(11)
 
 interpret = Interpreter(args.source_file, args.input_file)
 interpret.main()
