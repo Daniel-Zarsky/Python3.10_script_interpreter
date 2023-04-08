@@ -167,7 +167,7 @@ class Instruction:
 
     def check_operands(self):
         # self.debug()
-        i = 0
+
 
         op_count = 0
         for j in self.operands:
@@ -178,6 +178,11 @@ class Instruction:
             print("wrong operand count", file=sys.stderr)
             exit(32)
 
+        if self.operands[0] is None and (self.operands[1] is not None or self.operands[2] is not None):
+            print("missing argument", file=sys.stderr)
+            exit(32)
+
+        i = 0
         for o in self.operands:
             if o is not None:
                 if (self.expected[i] == 'symb') and (
@@ -774,13 +779,14 @@ class Read_source:
             if child.tag != 'instruction':
                 print("chyba v xml", file=sys.stderr)
                 exit(32)
-            if int(child.attrib['order']) < 1:
-                print("negative order", file=sys.stderr)
-                exit(32)
 
             child_at = child.attrib
             if len(child_at) != 2 or ('opcode' not in child_at or 'order' not in child_at):
                 print("chyba v xml", file=sys.stderr)
+                exit(32)
+
+            if not re.match(r'^[1-9]\d*$', child.attrib['order']):
+                print("negative order", file=sys.stderr)
                 exit(32)
 
             for number, arg in enumerate(child, 1):
