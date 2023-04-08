@@ -119,7 +119,7 @@ class Frames:
                 else:
                     return False
             else:
-                print("wrong frame", file=sys.stderr)
+                print("wrong frame can_access", file=sys.stderr)
                 exit(32)  # todo
 
     def get_value(self, name, frame):
@@ -130,18 +130,19 @@ class Frames:
         elif frame == 'TF':
             return self.temp[name].value
         else:
-            print("wrong frame", file=sys.stderr)
+            print("wrong frame get value", file=sys.stderr)
             exit(32)  # todo
 
     def set_value(self, frame, name, value):
-        if frame == 'GT' and name in self.glob:
+
+        if frame == 'GF' and name in self.glob:
             self.glob[name].set_value(value)
         elif frame == 'LF' and name in self.local:
             self.local[0][name].set_value(value)
         elif frame == 'TF' and name in self.temp:
             self.temp[name].set_value(value)
         else:
-            print("wrong frame", file=sys.stderr)
+            print("wrong frame set value", file=sys.stderr)
             exit(32)  # todo
 
 
@@ -153,7 +154,7 @@ class Operand:
 
 
 class Instruction:
-    def __init__(self, order, opcode, operands, frames, labels, input_file, datastack):
+    def __init__(self, order, opcode, operands, frames, labels, input_file, datastack, jumper):
         self.order = order
         self.opcode = opcode
         self.operands = operands
@@ -161,7 +162,7 @@ class Instruction:
         self.frames = frames
         self.labels = labels
         self.input = input_file
-
+        self.jumper = jumper
         self.expected = None  # expected types of arguments
 
     def check_operands(self):
@@ -232,38 +233,43 @@ class Instruction:
 
                 self.expected = ['var', 'symb']
                 self.check_operands()
+
                 if self.operands[1].type == 'var':
+
                     value = self.frames.get_value(self.operands[1].value, self.operands[1].frame)
                     self.frames.set_value(self.operands[0].frame, self.operands[0].value,
                                           value)  # asign variable to the first operand
                 else:
+
                     self.frames.set_value(self.operands[0].frame, self.operands[0].value,
                                           self.operands[1].value)  # asign constant to first operand
+
+                self.jumper.current += 1
 
             case 'CREATEFRAME':
                # print('xreatefrafe')
                 self.expected = []
                 self.check_operands()
                 self.frames.createframe()
-
+                self.jumper.current += 1
 
             case 'POPFRAME':
                 self.expected = []
                 self.check_operands()
                 self.frames.popframe()
+                self.jumper.current += 1
 
             case 'PUSHFRAME':
 
                 self.expected = []
                 self.check_operands()
                 self.frames.pushframe()
+                self.jumper.current += 1
 
             case 'DEFVAR':
 
                 self.expected = ['var']
                 self.check_operands()
-
-
                 var = Variable(self.operands[0].frame, self.operands[0].value, self.frames)
               # print(var.value)
                 if var.frame == 'GF':
@@ -272,16 +278,31 @@ class Instruction:
                 elif var.frame == 'TF':
                     self.frames.add_to_temp(var)
                 else:
-                    print("error can add v ar only to tf or gf ", file=sys.stderr)
+                    print("error can add var only to tf or gf ", file=sys.stderr)
                     exit(32)  # todo
+
+                self.jumper.current += 1
 
             case 'CALL':
                 self.expected = ['label']
                 self.check_operands()
 
+                value1 = self.get_op_val(0)  # get label name
+
+                where_to_jump_back = self.jumper.current + 1  # where will we continue after return
+                self.jumper.jump_back.insert(0, where_to_jump_back)  # STORE IT IN STACK
+                if value1 not in self.jumper.labels:
+                    print("non existing label", file=sys.stderr)
+                    exit(52)
+
+                self.jumper.current = self.jumper.labels[value1]  # SET CURRENT TO LABEL ORDER VALUE
+
             case 'RETURN':
                 self.expected = []
                 self.check_operands()
+
+                self.jumper.current = self.jumper.jump_back[0]  # JUMP BACK
+                del self.jumper.jump_back[0]  # poP IT
 
             case 'PUSHS':
                 self.expected = ['symb']
@@ -292,53 +313,91 @@ class Instruction:
                     self.datastack.insert(0, value)
                 else:
                     self.datastack.insert(0, self.operands[0].value)  # push directly value of constant
+
+                self.jumper.current += 1
+
             case 'POPS':
                 self.expected = ['var']
                 self.check_operands()
                 if len(self.datastack) != 0:
+                    self.frames.set_value(self.operands[0].frame, self.operands[0].value,
+                                          self.datastack[0])
                     del self.datastack[0]
+
+                self.jumper.current += 1
 
             case 'ADD':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
 
+                if self.operands[1].type != 'int' and self.operands[1].type != 'var' or (self.operands[2].type != 'int'
+                                                                                    and self.operands[2].type != 'var'):
+
+                    print("wrong operand type", file=sys.stderr)
+                    exit(53)
+
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
 
-                result = value1 + value2
+                result = int(value1) + int(value2)
+
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+
+                self.jumper.current += 1
 
             case 'SUB':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
+                if self.operands[1].type != 'int' and self.operands[1].type != 'var' or (self.operands[2].type != 'int'
+                                                                                         and self.operands[2].type != 'var'):
+                    print("wrong operand type", file=sys.stderr)
+                    exit(53)
 
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
 
-                result = value1 - value2
+                result = int(value1) - int(value2)
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+
+                self.jumper.current += 1
 
             case 'MUL':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
+                if self.operands[1].type != 'int' and self.operands[1].type != 'var' or (self.operands[2].type != 'int'
+                                                                                         and self.operands[2].type != 'var'):
+                    print("wrong operand type", file=sys.stderr)
+                    exit(53)
+
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
 
-                result = value1 * value2
+                result = int(value1) * int(value2)
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+
+                self.jumper.current += 1
 
             case 'IDIV':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
+
+                if self.operands[1].type != 'int' and self.operands[1].type != 'var' or (self.operands[2].type != 'int'
+                                                                                         and self.operands[
+                                                                                             2].type != 'var'):
+                    print("wrong operand type", file=sys.stderr)
+                    exit(53)
+
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
 
-                if value2 == 0:
+                if int(value2) == 0:
                     print("zero division", file=sys.stderr)
                     exit(57)
 
-                result = value1 // value2
+                result = int(value1) // int(value2)
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+
+                self.jumper.current += 1
 
             case 'LT':
                 self.expected = ['var', 'symb', 'symb']
@@ -354,6 +413,8 @@ class Instruction:
                 result = value1 < value2
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
+                self.jumper.current += 1
+
             case 'GT':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
@@ -368,6 +429,8 @@ class Instruction:
                 result = value1 > value2
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
+                self.jumper.current += 1
+
             case 'EQ':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
@@ -377,6 +440,8 @@ class Instruction:
 
                 result = value1 == value2
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+
+                self.jumper.current += 1
 
             case 'AND':
                 self.expected = ['var', 'symb', 'symb']
@@ -392,6 +457,8 @@ class Instruction:
                 result = value1 and value2
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
+                self.jumper.current += 1
+
             case 'OR':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
@@ -406,6 +473,8 @@ class Instruction:
                 result = value1 or value2
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
+                self.jumper.current += 1
+
             case 'NOT':
                 self.expected = ['var', 'symb']
                 self.check_operands()
@@ -419,11 +488,13 @@ class Instruction:
                 result = not value1
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
+                self.jumper.current += 1
+
             case 'INT2CHAR':
                 self.expected = ['var', 'symb']
                 self.check_operands()
 
-                value1 = self.get_op_val(1)
+                value1 = int(self.get_op_val(1))
 
                 try:
                     result = chr(value1)
@@ -432,6 +503,8 @@ class Instruction:
                     exit(53)
 
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+
+                self.jumper.current += 1
 
             case 'STRI2INT':
                 self.expected = ['var', 'symb', 'symb']
@@ -452,12 +525,33 @@ class Instruction:
 
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
+                self.jumper.current += 1
+
             case 'READ':
                 self.expected = ['var', 'type']
                 self.check_operands()
 
-                input()
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, value)
+                try:
+                    load = input()
+
+                    if type == int:
+                        try:
+                            result = int(load)
+                        except ValueError:
+                            result = 0
+                    elif type == bool:
+                        if re.match(r'^true$', load, re.IGNORECASE):
+                            result = True
+                        else:
+                            result = False
+                    else:
+                        result = load
+                except EOFError:
+                    result = ''
+
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+
+                self.jumper.current += 1
 
             case 'WRITE':
 
@@ -465,7 +559,12 @@ class Instruction:
                 self.check_operands()
 
                 value = self.get_op_val(0)
+                if isinstance(value, str):
+                    value = value.replace('\\032', ' ')
+
                 print(value, end="")
+
+                self.jumper.current += 1
 
             case 'CONCAT':
                 self.expected = ['var', 'symb', 'symb']
@@ -481,6 +580,8 @@ class Instruction:
                 result = value1 + value2
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
+                self.jumper.current += 1
+
             case 'STRLEN':
                 self.expected = ['var', 'symb']
                 self.check_operands()
@@ -489,6 +590,8 @@ class Instruction:
 
                 result = len(value1)
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+
+                self.jumper.current += 1
 
             case 'GETCHAR':
                 self.expected = ['var', 'symb', 'symb']
@@ -503,6 +606,8 @@ class Instruction:
 
                 result = value1[value2]
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+
+                self.jumper.current += 1
 
             case 'SETCHAR':
                 self.expected = ['var', 'symb', 'symb']
@@ -519,35 +624,101 @@ class Instruction:
                 var[symb1] = symb2[0]
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, var)
 
+                self.jumper.current += 1
+
             case 'TYPE':
                 self.expected = ['var', 'symb']
                 self.check_operands()
 
+                value = self.get_op_val(1)
+
+                if isinstance(value, str):
+                    if value == 'nil':
+                        var = 'nil'
+                        self.frames.set_value(self.operands[0].frame, self.operands[0].value, var)
+                    elif re.match(r'^[0-9]+$', value):
+                        var = 'int'
+                        self.frames.set_value(self.operands[0].frame, self.operands[0].value, var)
+                    elif re.match(r'^(true|false)$', value):
+                        var = 'bool'
+                        self.frames.set_value(self.operands[0].frame, self.operands[0].value, var)
+                    else:
+                        var = 'string'
+                        self.frames.set_value(self.operands[0].frame, self.operands[0].value, var)
+
+                elif value is None:
+                    var = ''
+                    self.frames.set_value(self.operands[0].frame, self.operands[0].value, var)
+
+                self.jumper.current += 1
+
             case 'LABEL':
+
                 self.expected = ['label']
                 self.check_operands()
+                self.jumper.current += 1
+
 
             case 'JUMP':
                 self.expected = ['label']
                 self.check_operands()
 
+                label_name = self.get_op_val(0)
+
+                if label_name not in self.jumper.labels:
+                    print("non existing label", file=sys.stderr)
+                    exit(52)
+
+
+                self.jumper.current = self.jumper.labels[label_name]
+               # print(self.jumper.current)
+
             case 'JUMPIFEQ':
                 self.expected = ['label', 'symb', 'symb']
                 self.check_operands()
+
+                label_name = self.operands[0].value
+                symb1 = self.get_op_val(1)
+                symb2 = self.get_op_val(2)
+
+                if label_name not in self.jumper.labels:
+                    print("non existing label", file=sys.stderr)
+                    exit(52)
+
+                if int(symb1) == int(symb2):
+
+                    self.jumper.current = self.jumper.labels[label_name]
+                else:
+                    self.jumper.current += 1
 
             case 'JUMPIFNEQ':
                 self.expected = ['label', 'symb', 'symb']
                 self.check_operands()
 
+                label_name = self.operands[0].value
+                symb1 = self.get_op_val(1)
+                symb2 = self.get_op_val(2)
+
+                if label_name not in self.jumper.labels:
+                    print("non existing label", file=sys.stderr)
+                    exit(52)
+
+                if int(symb1) != int(symb2):
+                    self.jumper.current = self.jumper.labels[label_name]
+                else:
+                    self.jumper.current += 1
+
             case 'EXIT':
                 self.expected = ['symb']
                 self.check_operands()
 
-                value1 = self.get_op_val(0)
+                value1 = int(self.get_op_val(0))
                 if value1 < 0 or value1 > 49:
                     exit(57)
 
+                self.jumper.current = -1
                 exit(value1)
+
 
             case 'DPRINT':
                 self.expected = ['symb']
@@ -555,10 +726,12 @@ class Instruction:
 
                 value1 = self.get_op_val(0)
                 print(value1, file=sys.stderr)
+                self.jumper.current += 1
 
             case 'BREAK':
                 self.expected = []
                 self.check_operands()
+                self.jumper.current += 1
 
             case _:
                 print("wrong opcode", file=sys.stderr)
@@ -566,13 +739,14 @@ class Instruction:
 
 
 class Read_source:
-    def __init__(self, source_file, frames, labels, datastack, input_file):
+    def __init__(self, source_file, frames, labels, datastack, input_file, jumper):
         self.root = None
         self.source = source_file
         self.input_file = input_file
         self.frames = frames
         self.labels = labels
         self.datastack = datastack
+        self.jumper = jumper
 
     def load(self):
         try:
@@ -666,7 +840,7 @@ class Read_source:
                     exit(31)
 
             new_int = Instruction(order, opcode, operands, self.frames, self.labels, self.input_file,
-                                  self.datastack, )
+                                  self.datastack, self.jumper)
             instruction_list.append(new_int)
 
             order_arr = []
@@ -680,9 +854,28 @@ class Read_source:
             #instruction_list.sort(key=lambda x: x.order, reverse=False)
             instruction_list = sorted(instruction_list, key=lambda x: x.order, reverse=False)
 
+        right_order = 0
+        for j in instruction_list:
+            j.order = right_order
+            right_order += 1
 
         return instruction_list
 
+class Jumper:
+    def __init__(self):
+        self.current = 0
+        self.jump_back = []
+        self.labels = {}
+
+
+    def extract_labels(self, in_list):
+        for i in in_list:
+            if i.opcode.upper() == 'LABEL':
+                if i.operands[0].value not in self.labels:
+                    self.labels[i.operands[0].value] = i.order
+                else:
+                    print("label redefinition", file=sys.stderr)
+                    exit(52)
 
 class Interpreter:
 
@@ -696,21 +889,25 @@ class Interpreter:
         self.labels = []
 
     def main(self):
-        xml = Read_source(self.source, self.frames, self.labels, self.datastack, self.in_list)
+        jumper = Jumper()
+        xml = Read_source(self.source, self.frames, self.labels, self.datastack, self.in_list, jumper)
         xml.load()
         xml.check()
         self.in_list = xml.fill_list()
 
-        i = 0
-        while i < len(self.in_list):
-            #self.frames.debug()
+        jumper.extract_labels(self.in_list)
 
-            instruction = self.in_list[i]
+        #print(jumper.labels)
+
+        while jumper.current < len(self.in_list):
+            #self.frames.debug()
+            #print(self.datastack)
+            instruction = self.in_list[jumper.current]
             #print(instruction.opcode)
             if instruction is None:
                 break
             else:
-                i = i + 1
+                #instruction.debug()
                 instruction.execute()
 
 
