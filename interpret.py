@@ -30,6 +30,7 @@ class Variable:
 
     def set_value(self, value):
         self.value = value
+       #print('value set')
 
 
 class Frames:
@@ -38,6 +39,13 @@ class Frames:
         self.temp = None
         self.glob = {}
 
+    def debug(self):
+        print('temp')
+        print(self.temp)
+        print('glob')
+        print(self.glob)
+        print('top local')
+        print(self.local)
 
     def createframe(self):
         self.temp = {}
@@ -46,7 +54,10 @@ class Frames:
         if self.temp is None:
             print("empty temporary", file=sys.stderr)
             exit(55)
+
         self.temp[variable.name] = variable
+
+       #print(self.temp)
 
     def add_to_glob(self, variable):
         self.glob[variable.name] = variable
@@ -60,45 +71,64 @@ class Frames:
         self.temp = None
 
     def popframe(self):
-        if self.temp is None:
-            print("empty temporary", file=sys.stderr)
+        if len(self.local) == 0:
+            print("empty local", file=sys.stderr)
             exit(55)
 
         self.temp = self.local[0]
         del self.local[0]
 
-    def exists(self, name):  # for defvar checking
+    def exists(self, opcode, name):  # for defvar checking
 
-        if name in self.glob:
-            return True
-
-        if self.temp is not None and name in self.temp:
-            return True
-
-        i = 0
-        while i < len(self.local):
-            if name in self.local[i]:
+            if name in self.glob:
                 return True
 
-        return False
+            if self.temp is not None and name in self.temp:
+                return True
 
-    def can_access(self, name):
-        if self.temp is not None and name in self.temp:  # in temporary
-            return True
-        elif name in self.glob:  # in global
-            return True
-        elif name in self.local:  # in the top local frame
+            i = 0
+            while i < len(self.local):
+                if name in self.local[i] and i == 0:
+                    return True
+
+            return False
+
+    def can_access(self, opcode, name, frame):
+
+        if opcode =='DEFVAR' or opcode == 'TYPE':
             return True
         else:
-            return False
+            if frame == 'GF':
+                if name in self.glob:
+                    return True
+                else:
+                    return False
+
+            elif frame == 'LF':
+                if name in self.local[0]:
+                    return True
+                else:
+                    return False
+            elif frame == 'TF':
+                if self.temp is None:
+                    print('TF after push', file=sys.stderr)
+                    exit(55)
+
+                if name in self.temp:
+                    return True
+                else:
+                    return False
+            else:
+                print("wrong frame", file=sys.stderr)
+                exit(32)  # todo
 
     def get_value(self, name, frame):
         if frame == 'GF':
-            return self.glob[name]
+            return self.glob[name].value
         elif frame == 'LF':
-            return self.local[0][name]
+            return self.local[0][name].value
         elif frame == 'TF':
-            return self.temp[name]
+            return self.temp[name].value
         else:
             print("wrong frame", file=sys.stderr)
             exit(32)  # todo
@@ -149,52 +179,61 @@ class Instruction:
 
         for o in self.operands:
             if o is not None:
-                if self.expected[i] != 'symb' and (
-                        self.operands[i].type == 'int' or self.operands[i].type == 'string'
-                        or self.operands[i].type == 'bool' or self.operands[i].type == 'var'
-                        or self.operands[i].type == 'nil'):
+                if (self.expected[i] == 'symb') and (
+                        self.operands[i].type != 'int' and self.operands[i].type != 'string'
+                        and self.operands[i].type != 'bool' and self.operands[i].type != 'var'
+                        and self.operands[i].type != 'nil'):
                     print("wrong operand type", file=sys.stderr)
                     exit(53)  # todo
-                else:
-                    if self.expected[i] != self.operands[i].type:
-                        print("wrong operand type here", file=sys.stderr)
-                        exit(53)  # todo
 
-                if (self.opcode != 'DEFVAR' or self.opcode != 'TYPE') and o.type == 'var' and (
-                not self.frames.can_access(o.value)):
+                if self.expected[i] != self.operands[i].type and self.expected[i] != 'symb':
+                    print(self.expected[i], end=" ")
+                    print(self.operands[i].type)
+                    print("wrong operand type here", file=sys.stderr)
+                    exit(66)  # todo
+
+                if o.type == 'var' and (
+                not self.frames.can_access(self.opcode, o.value, o.frame)):
+                   # print('problem here')
                     print("can not access the variable in operand", file=sys.stderr)  # no access to first
                     exit(55)  # todo
 
-                if (self.opcode != 'DEFVAR' or self.opcode != 'TYPE') and o.type == 'var' and not self.frames.exists(
-                        o.value):
-                    print("can not access the variable in operand", file=sys.stderr)  # no access to first
-                    exit(54)  # todo
+                if o.type == 'var' and not self.frames.exists(self.opcode, o.value):
+                    if self.opcode != 'DEFVAR' and self.opcode != 'TYPE':
+                        print("variable not exists", file=sys.stderr)  # no access to first
+                        exit(54)  # todo
 
 
     def debug(self):
-        print(self.opcode)
+        print(self.opcode, end=" ")
         print(self.order)
-        for op in self.operands:
-            if op is not None:
-                print(op.frame)
-                print(op.type)
-                print(op.value)
+        for i in self.operands:
+            if i is not None:
+                print(i.type, end=" ")
+                print(i.frame, end=" ")
+                print(i.value)
+
 
     def get_op_val(self, number):
-        if self.operands[number].type == 'var':
-            value = self.frames.get_value(self.operands[number].value, self.operands[1].frame)
-        else:
-            value = self.operands[number].value
+        if self.operands[number] is not None:
+            if self.operands[number].type == 'var':
+                value = self.frames.get_value(self.operands[number].value, self.operands[number].frame)
+            else:
+                value = self.operands[number].value
 
-        return value
+            return value
+        else:
+            print("wrong operand number ", file=sys.stderr)
+            exit(55)  # todo
 
     def execute(self):
         match self.opcode.upper():
             case 'MOVE':
+
                 self.expected = ['var', 'symb']
                 self.check_operands()
                 if self.operands[1].type == 'var':
-                    value = self.frames.get_value(self.operands[0].value, self.operands[0].frame)
+                    value = self.frames.get_value(self.operands[1].value, self.operands[1].frame)
                     self.frames.set_value(self.operands[0].frame, self.operands[0].value,
                                           value)  # asign variable to the first operand
                 else:
@@ -202,9 +241,11 @@ class Instruction:
                                           self.operands[1].value)  # asign constant to first operand
 
             case 'CREATEFRAME':
+               # print('xreatefrafe')
                 self.expected = []
                 self.check_operands()
                 self.frames.createframe()
+
 
             case 'POPFRAME':
                 self.expected = []
@@ -212,24 +253,27 @@ class Instruction:
                 self.frames.popframe()
 
             case 'PUSHFRAME':
+
                 self.expected = []
                 self.check_operands()
                 self.frames.pushframe()
 
             case 'DEFVAR':
+
                 self.expected = ['var']
                 self.check_operands()
 
-                if not self.frames.exists(self.operands[0].value):
-                    var = Variable(self.operands[0].frame, self.operands[0].value, self.frames)
 
-                    if var.frame == 'GF':
+                var = Variable(self.operands[0].frame, self.operands[0].value, self.frames)
+              # print(var.value)
+                if var.frame == 'GF':
+                    if not self.frames.exists(self.opcode, self.operands[0].value):
                         self.frames.add_to_glob(var)
-                    elif var.frame == 'TF':
-                        self.frames.add_to_temp(var)
-                    else:
-                        print("error can add v ar only to tf or gf ", file=sys.stderr)
-                        exit(32)  # todo
+                elif var.frame == 'TF':
+                    self.frames.add_to_temp(var)
+                else:
+                    print("error can add v ar only to tf or gf ", file=sys.stderr)
+                    exit(32)  # todo
 
             case 'CALL':
                 self.expected = ['label']
@@ -416,10 +460,12 @@ class Instruction:
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, value)
 
             case 'WRITE':
+
                 self.expected = ['symb']
                 self.check_operands()
 
-                print(self.operands[0].value, end="")
+                value = self.get_op_val(0)
+                print(value, end="")
 
             case 'CONCAT':
                 self.expected = ['var', 'symb', 'symb']
@@ -497,7 +543,7 @@ class Instruction:
                 self.expected = ['symb']
                 self.check_operands()
 
-                value1 = self.get_op_val(1)
+                value1 = self.get_op_val(0)
                 if value1 < 0 or value1 > 49:
                     exit(57)
 
@@ -506,6 +552,9 @@ class Instruction:
             case 'DPRINT':
                 self.expected = ['symb']
                 self.check_operands()
+
+                value1 = self.get_op_val(0)
+                print(value1, file=sys.stderr)
 
             case 'BREAK':
                 self.expected = []
@@ -527,11 +576,14 @@ class Read_source:
 
     def load(self):
         try:
-            xml = ET.parse(self.source)
-            self.root = xml.getroot()
+            parser = ET.parse(self.source)
         except ET.ParseError:
             print("error while reading xml", file=sys.stderr)
             exit(31)  # todo
+
+        self.root = parser.getroot()
+
+        return self.root
 
     def check(self):
 
@@ -573,7 +625,7 @@ class Read_source:
 
             opcode = child.attrib['opcode']
             operands = [None] * 3
-            order = child.attrib['order']
+            order = int(child.attrib['order'])
             for i, subchild in enumerate(child, 1):
                 if subchild.tag == 'arg1':
                     if subchild.attrib['type'] == 'var':
@@ -625,7 +677,9 @@ class Read_source:
                     print("duplicate order", file=sys.stderr)
                     exit(32)
 
-            instruction_list.sort(key=lambda x: x.order)
+            #instruction_list.sort(key=lambda x: x.order, reverse=False)
+            instruction_list = sorted(instruction_list, key=lambda x: x.order, reverse=False)
+
 
         return instruction_list
 
@@ -646,10 +700,13 @@ class Interpreter:
         xml.load()
         xml.check()
         self.in_list = xml.fill_list()
+
         i = 0
         while i < len(self.in_list):
-            # print(self.frames.glob)
+            #self.frames.debug()
+
             instruction = self.in_list[i]
+            #print(instruction.opcode)
             if instruction is None:
                 break
             else:
@@ -672,6 +729,7 @@ if (args.input_file is None) and (args.source_file is None):  # source and input
 
 if args.source_file:
     if not os.path.isfile(args.source_file):
+
         exit(11)
 if args.input_file:
     if not os.path.isfile(args.input_file):
