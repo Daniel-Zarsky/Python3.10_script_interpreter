@@ -564,13 +564,12 @@ class Instruction:
 
                 try:
                     load = input()
-
-                    if type == int:
+                    if re.match(r'^[0-9]+$', load):
                         try:
                             result = int(load)
                         except ValueError:
                             result = 0
-                    elif type == bool:
+                    elif re.match(r'^(true|false)$', load):
                         if re.match(r'^true$', load, re.IGNORECASE):
                             result = True
                         else:
@@ -592,6 +591,9 @@ class Instruction:
                 value = self.get_op_val(0)
                 if isinstance(value, str):
                     value = value.replace('\\032', ' ')
+                    value = value.replace('\\\\', '')
+                    value = value.replace('\\', '')
+                    value = value.replace('\n', '')
 
                 print(value, end="")
 
@@ -651,31 +653,26 @@ class Instruction:
                 symb1 = self.get_op_val(1)
                 symb2 = self.get_op_val(2)
 
-                if symb1 == 'true':
-                    symb1 = 1
-                if symb1 == 'nil':
-                        symb1 = 0
-                if symb2 == 'true':
-                    symb1 = 1
-                    nc = '1'
-                elif symb2 == 'nil':
-                    symb1 = 0
-                    nc = '0'
-                else:
-                    if symb2 is not None:
-                        nc = symb2[0]
+                if not re.match(r'^[0-9]+$', symb1):
+                    exit(53)
 
-                if symb2 is None or symb1 is None or var is None:
+                if not isinstance(symb2, str):
+                    exit(53)
+
+                if not isinstance(var, str):
+                    exit(53)
+
+                if symb1 is None or var is None:
                     print("invalid operands", file=sys.stderr)
                     exit(53)
 
-                if int(symb1) >= len(var):
+                if int(symb1) >= len(var) or symb2 == '':
                      print("value out of range", file=sys.stderr)
-                     exit(53)
+                     exit(58)
 
                 stra = var
                 posn = int(symb1)
-
+                nc = symb2[0]
 
                 stra = stra[:posn] + nc + stra[posn + 1:]
                 print(stra)
