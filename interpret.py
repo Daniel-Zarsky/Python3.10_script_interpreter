@@ -126,10 +126,23 @@ class Frames:
 
     def get_value(self, name, frame):
         if frame == 'GF':
+
+            if self.glob[name] is None:
+                print("value undefined", file=sys.stderr)
+                exit(55)
+
             return self.glob[name].value
         elif frame == 'LF':
+            if self.local[0][name] is None:
+                print("value undefined", file=sys.stderr)
+                exit(55)
+
             return self.local[0][name].value
         elif frame == 'TF':
+            if self.temp[name] is None:
+                print("value undefined", file=sys.stderr)
+                exit(55)
+
             return self.temp[name].value
         else:
             print("wrong frame get value", file=sys.stderr)
@@ -335,6 +348,8 @@ class Instruction:
                     self.frames.set_value(self.operands[0].frame, self.operands[0].value,
                                           self.datastack[0])
                     del self.datastack[0]
+                else:
+                    exit(56)
 
                 self.jumper.current += 1
 
@@ -603,10 +618,11 @@ class Instruction:
                 self.check_operands()
 
                 value1 = self.get_op_val(1)
-                if value1 is None:
-                    print("empty string", file=sys.stderr)
-                    exit(53)
-                result = len(value1)
+                if value1 is None or value1 == '':
+                    result = 0
+                else:
+                    result = len(value1)
+
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
                 self.jumper.current += 1
