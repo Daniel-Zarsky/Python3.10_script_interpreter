@@ -12,9 +12,6 @@ class Variable:
         self.name = name
         self.type = None
 
-    def defined(self):
-        if self.value is None:
-            return False
 
     def get_frame(self):  # check when reading value from input
         return self.frame
@@ -53,6 +50,7 @@ class Frames:
         self.local = []
         self.temp = None
         self.glob = {}
+        self.defined = {}
 
     def debug(self):
         print('temp')
@@ -70,14 +68,18 @@ class Frames:
             print("empty temporary", file=sys.stderr)
             exit(55)
 
+        self.defined[variable.name] = variable
         self.temp[variable.name] = variable
 
     # print(self.temp)
 
     def add_to_glob(self, variable):
+
+        self.defined[variable.name] = variable
         self.glob[variable.name] = variable
 
     def pushframe(self):
+
         if self.temp is None:
             print("empty temporary", file=sys.stderr)
             exit(55)
@@ -93,28 +95,14 @@ class Frames:
         self.temp = self.local[0]
         del self.local[0]
 
-    def exists(self, opcode, name):  # for defvar checking
-
-        if name in self.glob:
-            return True
-
-        if self.temp is not None and name in self.temp:
-            return True
-
-        i = 0
-        if len(self.local) != 0:
-            while i < len(self.local):
-                if name in self.local[i]:
-                    return True
-                i = i + 1
-
-        return False
 
     def can_access(self, opcode, name, frame):
+
 
         if opcode == 'DEFVAR' or opcode == 'TYPE':
             return True
         else:
+
             if frame == 'GF':
                 if name in self.glob:
                     return True
@@ -122,10 +110,13 @@ class Frames:
                     return False
 
             elif frame == 'LF':
-                if name in self.local:
-                    return True
+                if len(self.local) > 0:
+                    if name in self.local[0]:
+                        return True
+                    else:
+                        return False
                 else:
-                    return False
+                   exit(55)
             elif frame == 'TF':
                 if self.temp is None:
                     print('TF after push', file=sys.stderr)
@@ -243,23 +234,22 @@ class Instruction:
             print("missing argument", file=sys.stderr)
             exit(32)
 
-        i = 0
+
         for o in self.operands:
             if o is not None:
-                if o.type == 'var' and (
-                        not self.frames.can_access(self.opcode, o.value, o.frame)):
+                if o.type == 'var' and (not self.frames.can_access(self.opcode, o.value, o.frame)):
                     # print('problem here')
                     print("can not access the variable in operand", file=sys.stderr)  # no access to first
                     exit(54)  # todo
 
     def debug(self):
-        print(self.opcode, end=" ")
-        print(self.order)
+        print(self.opcode, end=" ", file=sys.stderr)
+        print(self.order, file=sys.stderr)
         for i in self.operands:
             if i is not None:
-                print(i.type, end=" ")
-                print(i.frame, end=" ")
-                print(i.value)
+                print(i.type, end=" ", file=sys.stderr)
+                print(i.frame, end=" ", file=sys.stderr)
+                print(i.value, file=sys.stderr)
 
     def get_op_val(self, number):
         if self.operands[number] is not None:
@@ -321,20 +311,19 @@ class Instruction:
                 self.check_operands()
                 var = Variable(self.operands[0].frame, self.operands[0].value)
                 # print(var.value)
-                if var.frame == 'GF':
-                    if not self.frames.exists(self.opcode, self.operands[0].value):
-                        self.frames.add_to_glob(var)
+                if not self.frames.exists(self.operands[0].value):
+                    if var.frame == 'GF':
+                            self.frames.add_to_glob(var)
+                    elif var.frame == 'TF' and self.frames.temp is not None:
+                        if var not in self.frames.temp:
+                            self.frames.add_to_temp(var)
+                        else:
+                            exit(52)
                     else:
-                        exit(52)
-                elif var.frame == 'TF' and self.frames.temp is not None:
-                    if var not in self.frames.temp:
-                        self.frames.add_to_temp(var)
-                    else:
-                        exit(52)
+                        print("error can add var only to tf or gf ", file=sys.stderr)
+                        exit(55)  # todo
                 else:
-                    print("error can add var only to tf or gf ", file=sys.stderr)
-                    exit(55)  # todo
-
+                  exit(52)
                 self.jumper.current += 1
 
             case 'CALL':
@@ -401,7 +390,7 @@ class Instruction:
                     exit(53)
 
                 result = int(value1) + int(value2)
-
+                print(f"added {result}", file=sys.stderr)
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
                 self.jumper.current += 1
@@ -829,7 +818,7 @@ class Instruction:
                     print("non existing label", file=sys.stderr)
                     exit(52)
 
-                if symb1 == symb2:
+                if int(symb1) == int(symb2):
 
                     self.jumper.current = self.jumper.labels[label_name]
                 else:
@@ -872,6 +861,7 @@ class Instruction:
                 if int(value1) < 0 or int(value1) > 49:
                     exit(57)
 
+
                 os._exit(int(value1))
 
             case 'DPRINT':
@@ -908,13 +898,13 @@ class Read_source:
                 parser = ET.parse(sys.stdin.buffer)
             except ET.ParseError:
                 print("error while reading xml", file=sys.stderr)
-                exit(31)  # todo
+                exit(31)
         else:
             try:
                 parser = ET.parse(self.source)
             except ET.ParseError:
-                print("error while reading xml", file=sys.stderr)
-                exit(31)  # todo
+                print("error while reading xml here ", file=sys.stderr)
+                exit(31)
 
         self.root = parser.getroot()
 
@@ -926,10 +916,10 @@ class Read_source:
             if self.root.attrib['language'].upper() != "IPPcode23".upper():  # name a description nekotroluju kdyz
                 # jsou volitelne
                 print("error while reading xml", file=sys.stderr)
-                exit(32)  # todo
+                exit(32)
         except KeyError:
             print("error while reading xml v hlavicce", file=sys.stderr)
-            exit(31)  # todo
+            exit(31)
 
         for child in self.root:
             if child.tag != 'instruction':
@@ -1072,7 +1062,7 @@ class Interpreter:
             if instruction is None:
                 break
             else:
-                # instruction.debug()
+                #instruction.debug()
                 instruction.execute()
 
 
@@ -1085,13 +1075,15 @@ parser.add_argument('--input', action='store', dest='input_file',
                     help='soubor se vstupy pro samotnou interpretaci')
 args = parser.parse_args()
 
-if args.source_file is not None and args.input_file is not None:
+if args.source_file is not None or args.input_file is not None:
     if args.source_file:
         if not os.path.isfile(args.source_file):
             exit(11)
     if args.input_file:
         if not os.path.isfile(args.input_file):
             exit(11)
+else:
+    exit(11)
 
 interpret = Interpreter(args.source_file, args.input_file)
 interpret.main()
