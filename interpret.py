@@ -256,6 +256,7 @@ class Instruction:
                     # print('problem here')
                     print("can not access the variable in operand", file=sys.stderr)  # no access to first
                     exit(54)
+
                 if o.type == 'string':
                    # print("string before processing " + o.value, file=sys.stderr)
                     escapePattern = re.compile(r'(\\[0-9]{3})', re.UNICODE)
@@ -269,6 +270,9 @@ class Instruction:
                         "'": "&apos;",
                         ">": "&gt;",
                         "<": "&lt;",
+                        " ": "",
+                        "\\": "",
+                        "#": "",
                     }
 
                     for part in parts:
@@ -519,15 +523,12 @@ class Instruction:
                 self.check_operands()
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
-
+                print(f"value 1 {value1} ", file=sys.stderr)
+                print(f"value 2 {value2} ", file=sys.stderr)
                 type1 = self.get_op_type(1)
                 type2 = self.get_op_type(2)
 
-                if type1 != type2:
-                    exit(53)
-
-                if value1 is None or value2 is None:
-                    print("operand with no value ", file=sys.stderr)
+                if type1 != type2 or (type1 == 'nil' or type2 == 'nil'):
                     exit(53)
 
                 result = value1 > value2
@@ -535,6 +536,7 @@ class Instruction:
                     result = 'true'
                 else:
                     result = 'false'
+                print(f"value 2 {value2} ", file=sys.stderr)
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result, 'bool')
 
                 self.jumper.current += 1
