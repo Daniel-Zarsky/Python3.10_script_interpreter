@@ -24,6 +24,9 @@ class Variable:
         return self.frame
 
     def get_value(self):  # check when reading value from input
+        if self.value is None:
+            print("value undefined", file=sys.stderr)
+            exit(56)
         return self.value
 
     def get_name(self):  # check when reading value from input
@@ -132,24 +135,24 @@ class Frames:
                 print("value undefined", file=sys.stderr)
                 exit(55)
 
-            return self.glob[name].value
+            return self.glob[name].get_value()
         elif frame == 'LF':
             if len(self.local) > 0:
                 if name not in self.local[0]:
                     print("value undefined", file=sys.stderr)
                     exit(55)
                 else:
-                    return self.local[0][name].value
+                    return self.local[0][name].get_value()
             else:
-                print("value undefined", file=sys.stderr)
+                print("wrong frame", file=sys.stderr)
                 exit(55)
 
         elif frame == 'TF' and self.temp is not None:
             if name not in self.temp:
-                print("value undefined", file=sys.stderr)
+                print("wrong frame or temporary not exists", file=sys.stderr)
                 exit(55)
 
-            return self.temp[name].value
+            return self.temp[name].get_value
         else:
             print("wrong frame get value", file=sys.stderr)
             exit(32)  # todo
