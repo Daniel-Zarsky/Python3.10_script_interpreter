@@ -6,15 +6,11 @@ import os
 
 
 class Variable:
-    def __init__(self, frame, name, frames):
+    def __init__(self, frame, name):
         self.value = None
         self.frame = frame
         self.name = name
-        self.frames = frames
-
-    def debug(self):
-        print(self.frame)
-        print(self.name)
+        self.type = None
 
     def defined(self):
         if self.value is None:
@@ -29,12 +25,27 @@ class Variable:
             exit(56)
         return self.value
 
+    def get_type(self):
+        return self.type
+
     def get_name(self):  # check when reading value from input
         return self.name
 
     def set_value(self, value):
-        self.value = value
-    # print('value set')
+
+
+        if re.match(r'^[0-9]+$', str(value)):
+            self.type = 'int'
+            self.value = int(value)
+        elif re.match(r'^(true|false)$', str(value)):
+            self.type = 'bool'
+            self.value = value
+        elif re.match(r'^(nil)$', str(value)):
+            self.type = 'nil'
+            self.value = 'nil'
+        else:
+            self.type = 'string'
+            self.value = str(value)
 
 
 class Frames:
@@ -153,7 +164,7 @@ class Frames:
                     print("wrong frame or temporary not exists", file=sys.stderr)
                     exit(54)
                 else:
-                    return self.temp[name].get_value
+                    return self.temp[name].get_value()
             else:
                 print("wrong frame or temporary not exists", file=sys.stderr)
                 exit(55)
@@ -161,6 +172,15 @@ class Frames:
         else:
             print("wrong frame get value", file=sys.stderr)
             exit(32)  # todo
+
+    def get_type(self, name, frame):
+        if frame == 'GF':
+            return self.glob[name].get_type()
+        elif frame == 'LF':
+            return self.local[0][name].get_value()
+        elif frame == 'TF':
+            return self.temp[name].get_value()
+
 
     def set_value(self, frame, name, value):
 
@@ -226,19 +246,6 @@ class Instruction:
         i = 0
         for o in self.operands:
             if o is not None:
-                if (self.expected[i] == 'symb') and (
-                        self.operands[i].type != 'int' and self.operands[i].type != 'string'
-                        and self.operands[i].type != 'bool' and self.operands[i].type != 'var'
-                        and self.operands[i].type != 'nil'):
-                    print("wrong operand type", file=sys.stderr)
-                    exit(53)  # todo
-
-                if self.expected[i] != self.operands[i].type and self.expected[i] != 'symb':
-                    print(self.expected[i], end=" ")
-                    print(self.operands[i].type)
-                    print("wrong operand type here", file=sys.stderr)
-                    exit(66)  # todo
-
                 if o.type == 'var' and (
                         not self.frames.can_access(self.opcode, o.value, o.frame)):
                     # print('problem here')
@@ -268,7 +275,17 @@ class Instruction:
         else:
             print("wrong operand number ", file=sys.stderr)
             exit(55)  # todo
+    def get_op_type(self, number):
+        if self.operands[number] is not None:
+            if self.operands[number].type == 'var':
+                type = self.frames.get_type(self.operands[number].value, self.operands[number].frame)
+            else:
+                type = self.operands[number].type
 
+            return type
+        else:
+            print("wrong operand number ", file=sys.stderr)
+            exit(55)  # todo
     def execute(self):
         match self.opcode.upper():
             case 'MOVE':
@@ -305,7 +322,7 @@ class Instruction:
 
                 self.expected = ['var']
                 self.check_operands()
-                var = Variable(self.operands[0].frame, self.operands[0].value, self.frames)
+                var = Variable(self.operands[0].frame, self.operands[0].value)
                 # print(var.value)
                 if var.frame == 'GF':
                     if not self.frames.exists(self.opcode, self.operands[0].value):
@@ -326,6 +343,8 @@ class Instruction:
             case 'CALL':
                 self.expected = ['label']
                 self.check_operands()
+                if self.operands[0]. type != 'label':
+                    exit(53)
 
                 value1 = self.get_op_val(0)  # get label name
 
@@ -376,22 +395,14 @@ class Instruction:
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
 
-                if self.operands[1].type != 'int' and self.operands[1].type != 'var' or (self.operands[2].type != 'int'
-                                                                                         and self.operands[
-                                                                                             2].type != 'var'):
-                    print("wrong operand type", file=sys.stderr)
+                type1 = self.get_op_type(1)
+                type2 = self.get_op_type(2)
+
+                if type1 != type2 or type1 != 'int' or type1 is None:
                     exit(53)
 
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
-
-                if value1 is None or value2 is None:
-                    print("invalid operands", file=sys.stderr)
-                    exit(53)
-
-                if not re.match(r'^[0-9]+$', value2) or not re.match(r'^[0-9]+$', value1):
-                    exit(53)
-
                 result = int(value1) + int(value2)
 
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
@@ -401,21 +412,15 @@ class Instruction:
             case 'SUB':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
-                if self.operands[1].type != 'int' and self.operands[1].type != 'var' or (self.operands[2].type != 'int'
-                                                                                         and self.operands[
-                                                                                             2].type != 'var'):
-                    print("wrong operand type", file=sys.stderr)
+
+                type1 = self.get_op_type(1)
+                type2 = self.get_op_type(2)
+
+                if type1 != type2 or type1 != 'int' or type1 is None:
                     exit(53)
+
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
-
-                if value1 is None or value2 is None:
-                    print("invalid operands", file=sys.stderr)
-                    exit(53)
-
-                if not re.match(r'^[0-9]+$', value2) or not re.match(r'^[0-9]+$', value1):
-                    exit(53)
-
                 result = int(value1) - int(value2)
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
@@ -424,22 +429,15 @@ class Instruction:
             case 'MUL':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
-                if self.operands[1].type != 'int' and self.operands[1].type != 'var' or (self.operands[2].type != 'int'
-                                                                                         and self.operands[
-                                                                                             2].type != 'var'):
-                    print("wrong operand type", file=sys.stderr)
+
+                type1 = self.get_op_type(1)
+                type2 = self.get_op_type(2)
+
+                if type1 != type2 or type1 != 'int' or type1 is None:
                     exit(53)
 
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
-
-                if value1 is None or value2 is None:
-                    print("invalid operands", file=sys.stderr)
-                    exit(53)
-
-                if not re.match(r'^[0-9]+$', value2) or not re.match(r'^[0-9]+$', value1):
-                    exit(53)
-
                 result = int(value1) * int(value2)
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
@@ -448,25 +446,16 @@ class Instruction:
             case 'IDIV':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
+                type1 = self.get_op_type(1)
+                type2 = self.get_op_type(2)
 
-                if self.operands[1].type != 'int' and self.operands[1].type != 'var' or (self.operands[2].type != 'int'
-                                                                                         and self.operands[
-                                                                                             2].type != 'var'):
-                    print("wrong operand type", file=sys.stderr)
+                if type1 != type2 or type1 != 'int' or type1 is None:
                     exit(53)
 
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
 
-                if value1 is None or value2 is None:
-                    print("operand with no value ", file=sys.stderr)
-                    exit(53)
-
-                if not re.match(r'^[0-9]+$', value2) or not re.match(r'^[0-9]+$', value1):
-                    exit(53)
-
-                if int(value2) == 0:
-                    print("zero division", file=sys.stderr)
+                if value2 == 0:
                     exit(57)
 
                 result = int(value1) // int(value2)
@@ -478,18 +467,20 @@ class Instruction:
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
 
-                if self.operands[1].type == 'nil' or self.operands[2].type == 'nil':
-                    print("nil in lower", file=sys.stderr)
+                type1 = self.get_op_type(1)
+                type2 = self.get_op_type(2)
+
+                if type1 != type2:
                     exit(53)
 
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
 
-                if value1 is None or value2 is None:
-                    print("operand with no value ", file=sys.stderr)
-                    exit(53)
-
                 result = value1 < value2
+                if result is True:
+                    result = 'true'
+                else:
+                    result = 'false'
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
                 self.jumper.current += 1
@@ -498,8 +489,10 @@ class Instruction:
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
 
-                if self.operands[1].type == 'nil' or self.operands[2].type == 'nil':
-                    print("nil in greater", file=sys.stderr)
+                type1 = self.get_op_type(1)
+                type2 = self.get_op_type(2)
+
+                if type1 != type2:
                     exit(53)
 
                 value1 = self.get_op_val(1)
@@ -510,6 +503,10 @@ class Instruction:
                     exit(53)
 
                 result = value1 > value2
+                if result is True:
+                    result = 'true'
+                else:
+                    result = 'false'
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
                 self.jumper.current += 1
@@ -517,15 +514,19 @@ class Instruction:
             case 'EQ':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
+                type1 = self.get_op_type(1)
+                type2 = self.get_op_type(2)
 
+                if type1 != type2:
+                    exit(53)
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
 
-                if value1 is None or value2 is None:
-                    print("operand with no value ", file=sys.stderr)
-                    exit(53)
-
                 result = value1 == value2
+                if result is True:
+                    result = 'true'
+                else:
+                    result = 'false'
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
                 self.jumper.current += 1
@@ -534,19 +535,31 @@ class Instruction:
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
 
-                if self.operands[1].type != 'bool' or self.operands[2].type != 'bool':
-                    print("nil in greater", file=sys.stderr)
+                type1 = self.get_op_type(1)
+                type2 = self.get_op_type(2)
+
+                if type1 != type2 or type1 != 'bool':
                     exit(53)
 
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
 
-                if value1 is None or value2 is None:
-                    print("operand with no value ", file=sys.stderr)
-                    exit(53)
+                if value1 == 'true':
+                    value1 = True
+                else:
+                    value1 = False
+
+                if value2 == 'true':
+                    value2 = True
+                else:
+                    value2 = False
 
                 result = value1 and value2
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+                if result is True:
+                    result1 = 'true'
+                else:
+                    result1 = 'false'
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result1)
 
                 self.jumper.current += 1
 
@@ -554,19 +567,32 @@ class Instruction:
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
 
-                if self.operands[1].type != 'bool' or self.operands[2].type != 'bool':
-                    print("nil in greater", file=sys.stderr)
+                type1 = self.get_op_type(1)
+                type2 = self.get_op_type(2)
+
+                if type1 != type2 or type1 != 'bool':
                     exit(53)
 
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
 
-                if value1 is None or value2 is None:
-                    print("operand with no value ", file=sys.stderr)
-                    exit(53)
+                if value1 == 'true':
+                    value1 = True
+                else:
+                    value1 = False
+
+                if value2 == 'true':
+                    value2 = True
+                else:
+                    value2 = False
 
                 result = value1 or value2
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+                if result is True:
+                    result1 = 'true'
+                else:
+                    result1 = 'false'
+
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result1)
 
                 self.jumper.current += 1
 
@@ -574,14 +600,21 @@ class Instruction:
                 self.expected = ['var', 'symb']
                 self.check_operands()
 
-                if self.operands[1].type != 'bool':
-                    print("nil in greater", file=sys.stderr)
+                type1 = self.get_op_type(1)
+                if type1 != 'bool':
                     exit(53)
 
                 value1 = self.get_op_val(1)
-
+                if value1 == 'true':
+                    value1 = True
+                else:
+                    value1 = False
                 result = not value1
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+                if result is True:
+                    result1 = 'true'
+                else:
+                    result1 = 'false'
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result1)
 
                 self.jumper.current += 1
 
@@ -589,15 +622,12 @@ class Instruction:
                 self.expected = ['var', 'symb']
                 self.check_operands()
 
+                type1 = self.get_op_type(1)
+                if type1 != 'int':
+                    exit(53)
                 value1 = self.get_op_val(1)
-                if value1 is not None:
-                    if not re.match(r'^[0-9]+$', value1):
-                        exit(53)
-
-                    if int(value1) < 0 or int(value1) > 128:
-                        exit(53)
-                else:
-                    exit(3)
+                if int(value1) < 0 or int(value1) > 128:
+                    exit(58)
 
                 try:
                     result = chr(int(value1))
@@ -612,17 +642,17 @@ class Instruction:
             case 'STRI2INT':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
+
+                type1 = self.get_op_type(1)
+                type2 = self.get_op_type(2)
+
+                if type1 != 'string' or type2 != 'int':
+                    exit(53)
+
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
 
-                if value1 is None or value2 is None:
-                    print("invalid operands", file=sys.stderr)
-                    exit(53)
-
-                if not re.match(r'^[0-9]+$', value2):
-                    exit(53)
-
-                if int(value2) >= len(value1):
+                if int(value2) >= len(value1) or int(value2) < 0:
                     print("value out of range", file=sys.stderr)
                     exit(58)
 
@@ -643,20 +673,20 @@ class Instruction:
 
                 try:
                     load = input()
-                    if re.match(r'^[0-9]+$', load):
-                        try:
-                            result = int(load)
-                        except ValueError:
-                            result = 0
-                    elif re.match(r'^(true|false)$', load):
-                        if re.match(r'^true$', load, re.IGNORECASE):
-                            result = True
+                    type = self.operands[1].type
+
+                    if type == 'int':
+                        result = int(load)
+                    elif type == 'bool':
+                        if load != 'true':
+                            result = 'false'
                         else:
-                            result = False
+                            result = load
                     else:
                         result = load
+
                 except EOFError:
-                    result = ''
+                    result = 'nil'
 
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
@@ -668,11 +698,6 @@ class Instruction:
                 self.check_operands()
 
                 value = self.get_op_val(0)
-                if isinstance(value, str):
-                    value = value.replace('\\032', ' ')
-                    value = value.replace('\\\\', '')
-                    value = value.replace('\\', '')
-                    value = value.replace('\n', '')
 
                 print(value, end="")
 
@@ -773,25 +798,9 @@ class Instruction:
                 self.expected = ['var', 'symb']
                 self.check_operands()
 
-                value = self.get_op_val(1)
+                type1 = self.get_op_type(1)
 
-                if isinstance(value, str):
-                    if value == 'nil':
-                        var = 'nil'
-                        self.frames.set_value(self.operands[0].frame, self.operands[0].value, var)
-                    elif re.match(r'^[0-9]+$', value):
-                        var = 'int'
-                        self.frames.set_value(self.operands[0].frame, self.operands[0].value, var)
-                    elif re.match(r'^(true|false)$', value):
-                        var = 'bool'
-                        self.frames.set_value(self.operands[0].frame, self.operands[0].value, var)
-                    else:
-                        var = 'string'
-                        self.frames.set_value(self.operands[0].frame, self.operands[0].value, var)
-
-                elif value is None:
-                    var = ''
-                    self.frames.set_value(self.operands[0].frame, self.operands[0].value, var)
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, type1)
 
                 self.jumper.current += 1
 
