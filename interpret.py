@@ -394,6 +394,8 @@ class Instruction:
             case 'ADD':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
+                value1 = self.get_op_val(1)
+                value2 = self.get_op_val(2)
 
                 type1 = self.get_op_type(1)
                 type2 = self.get_op_type(2)
@@ -401,8 +403,6 @@ class Instruction:
                 if type1 != type2 or type1 != 'int' or type1 is None:
                     exit(53)
 
-                value1 = self.get_op_val(1)
-                value2 = self.get_op_val(2)
                 result = int(value1) + int(value2)
 
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
@@ -412,6 +412,8 @@ class Instruction:
             case 'SUB':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
+                value1 = self.get_op_val(1)
+                value2 = self.get_op_val(2)
 
                 type1 = self.get_op_type(1)
                 type2 = self.get_op_type(2)
@@ -419,8 +421,7 @@ class Instruction:
                 if type1 != type2 or type1 != 'int' or type1 is None:
                     exit(53)
 
-                value1 = self.get_op_val(1)
-                value2 = self.get_op_val(2)
+
                 result = int(value1) - int(value2)
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
@@ -429,6 +430,8 @@ class Instruction:
             case 'MUL':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
+                value1 = self.get_op_val(1)
+                value2 = self.get_op_val(2)
 
                 type1 = self.get_op_type(1)
                 type2 = self.get_op_type(2)
@@ -436,8 +439,6 @@ class Instruction:
                 if type1 != type2 or type1 != 'int' or type1 is None:
                     exit(53)
 
-                value1 = self.get_op_val(1)
-                value2 = self.get_op_val(2)
                 result = int(value1) * int(value2)
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
@@ -446,14 +447,13 @@ class Instruction:
             case 'IDIV':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
+                value1 = self.get_op_val(1)
+                value2 = self.get_op_val(2)
                 type1 = self.get_op_type(1)
                 type2 = self.get_op_type(2)
 
                 if type1 != type2 or type1 != 'int' or type1 is None:
                     exit(53)
-
-                value1 = self.get_op_val(1)
-                value2 = self.get_op_val(2)
 
                 if value2 == 0:
                     exit(57)
@@ -466,15 +466,14 @@ class Instruction:
             case 'LT':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
+                value1 = self.get_op_val(1)
+                value2 = self.get_op_val(2)
 
                 type1 = self.get_op_type(1)
                 type2 = self.get_op_type(2)
 
                 if type1 != type2:
                     exit(53)
-
-                value1 = self.get_op_val(1)
-                value2 = self.get_op_val(2)
 
                 result = value1 < value2
                 if result is True:
@@ -488,6 +487,8 @@ class Instruction:
             case 'GT':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
+                value1 = self.get_op_val(1)
+                value2 = self.get_op_val(2)
 
                 type1 = self.get_op_type(1)
                 type2 = self.get_op_type(2)
@@ -495,8 +496,7 @@ class Instruction:
                 if type1 != type2:
                     exit(53)
 
-                value1 = self.get_op_val(1)
-                value2 = self.get_op_val(2)
+
 
                 if value1 is None or value2 is None:
                     print("operand with no value ", file=sys.stderr)
@@ -514,13 +514,14 @@ class Instruction:
             case 'EQ':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
+                value1 = self.get_op_val(1)
+                value2 = self.get_op_val(2)
+
                 type1 = self.get_op_type(1)
                 type2 = self.get_op_type(2)
 
                 if type1 != type2:
                     exit(53)
-                value1 = self.get_op_val(1)
-                value2 = self.get_op_val(2)
 
                 result = value1 == value2
                 if result is True:
@@ -534,15 +535,14 @@ class Instruction:
             case 'AND':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
+                value1 = self.get_op_val(1)
+                value2 = self.get_op_val(2)
 
                 type1 = self.get_op_type(1)
                 type2 = self.get_op_type(2)
 
                 if type1 != type2 or type1 != 'bool':
                     exit(53)
-
-                value1 = self.get_op_val(1)
-                value2 = self.get_op_val(2)
 
                 if value1 == 'true':
                     value1 = True
@@ -567,14 +567,14 @@ class Instruction:
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
 
+                value1 = self.get_op_val(1)
+                value2 = self.get_op_val(2)
+
                 type1 = self.get_op_type(1)
                 type2 = self.get_op_type(2)
 
                 if type1 != type2 or type1 != 'bool':
                     exit(53)
-
-                value1 = self.get_op_val(1)
-                value2 = self.get_op_val(2)
 
                 if value1 == 'true':
                     value1 = True
@@ -599,12 +599,11 @@ class Instruction:
             case 'NOT':
                 self.expected = ['var', 'symb']
                 self.check_operands()
-
+                value1 = self.get_op_val(1)
                 type1 = self.get_op_type(1)
                 if type1 != 'bool':
                     exit(53)
 
-                value1 = self.get_op_val(1)
                 if value1 == 'true':
                     value1 = True
                 else:
@@ -621,11 +620,11 @@ class Instruction:
             case 'INT2CHAR':
                 self.expected = ['var', 'symb']
                 self.check_operands()
-
+                value1 = self.get_op_val(1)
                 type1 = self.get_op_type(1)
                 if type1 != 'int':
                     exit(53)
-                value1 = self.get_op_val(1)
+
                 if int(value1) < 0 or int(value1) > 128:
                     exit(58)
 
@@ -643,14 +642,14 @@ class Instruction:
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
 
+                value1 = self.get_op_val(1)
+                value2 = self.get_op_val(2)
+
                 type1 = self.get_op_type(1)
                 type2 = self.get_op_type(2)
 
                 if type1 != 'string' or type2 != 'int':
                     exit(53)
-
-                value1 = self.get_op_val(1)
-                value2 = self.get_op_val(2)
 
                 if int(value2) >= len(value1) or int(value2) < 0:
                     print("value out of range", file=sys.stderr)
@@ -706,14 +705,14 @@ class Instruction:
             case 'CONCAT':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
-
-                if self.operands[1].type != 'string' and self.operands[1].type != 'var' or (self.operands[2].type != 'string'
-                                                                                         and self.operands[
-                                                                                             2].type != 'var'):
-                    print("wrong operand type", file=sys.stderr)
-                    exit(53)
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
+
+                type1 = self.get_op_type(1)
+                type2 = self.get_op_type(2)
+
+                if type1 != 'string' or type2 != 'string':
+                    exit(53)
 
                 result = value1 + value2
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
@@ -724,10 +723,11 @@ class Instruction:
                 self.expected = ['var', 'symb']
                 self.check_operands()
 
-                if self.operands[1].type != 'string' and self.operands[1].type != 'var':
-                    exit(53)
-
                 value1 = self.get_op_val(1)
+
+                type1 = self.get_op_type(1)
+                if type1 != 'string':
+                    exit(53)
 
                 if value1 is None or value1 == '':
                     result = 0
@@ -745,14 +745,15 @@ class Instruction:
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
 
-                if value1 is None or value2 is None:
-                    print("invalid operands", file=sys.stderr)
+                type1 = self.get_op_type(1)
+                type2 = self.get_op_type(2)
+
+                if type1 != 'string' or type2 != 'int':
                     exit(53)
-                if not re.match(r'^[0-9]+$', value2):
-                    exit(53)
+
                 if int(value2) >= len(value1):
                     print("value out of range", file=sys.stderr)
-                    exit(53)
+                    exit(58)
 
                 result = value1[int(value2)]
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
@@ -767,30 +768,21 @@ class Instruction:
                 symb1 = self.get_op_val(1)
                 symb2 = self.get_op_val(2)
 
-                if symb1 is None or var is None:
-                    print("invalid operands", file=sys.stderr)
+                type0 = self.get_op_type(0)
+                type1 = self.get_op_type(1)
+                type2 = self.get_op_type(2)
+
+                if type1 != 'int' or type2 != 'string' or type0 != 'string':
                     exit(53)
 
-                if not re.match(r'^[0-9]+$', symb1):
-                    exit(53)
-
-                if not isinstance(symb2, str):
-                    exit(53)
-
-                if not isinstance(var, str):
-                    exit(53)
-
-                if int(symb1) >= len(var) or symb2 == '':
+                if int(symb1) >= len(var) or int(symb1) < 0 or symb2 == '':
                     print("value out of range", file=sys.stderr)
                     exit(58)
 
-                stra = var
                 posn = int(symb1)
                 nc = symb2[0]
-
-                stra = stra[:posn] + nc + stra[posn + 1:]
-                print(stra)
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, stra)
+                var = var[:posn] + nc + var[posn + 1:]
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, var)
 
                 self.jumper.current += 1
 
