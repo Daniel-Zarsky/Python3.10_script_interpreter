@@ -268,9 +268,6 @@ class Instruction:
             else:
                 value = self.operands[number].value
 
-            if value is None:
-                exit(56)
-
             return value
         else:
             print("wrong operand number ", file=sys.stderr)
@@ -336,7 +333,7 @@ class Instruction:
                         exit(52)
                 else:
                     print("error can add var only to tf or gf ", file=sys.stderr)
-                    exit(56)  # todo
+                    exit(55)  # todo
 
                 self.jumper.current += 1
 
@@ -455,7 +452,7 @@ class Instruction:
                 if type1 != type2 or type1 != 'int' or type1 is None:
                     exit(53)
 
-                if value2 == 0:
+                if int(value2) == 0:
                     exit(57)
 
                 result = int(value1) // int(value2)
@@ -495,8 +492,6 @@ class Instruction:
 
                 if type1 != type2:
                     exit(53)
-
-
 
                 if value1 is None or value2 is None:
                     print("operand with no value ", file=sys.stderr)
@@ -705,6 +700,7 @@ class Instruction:
             case 'CONCAT':
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
+
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
 
@@ -790,6 +786,7 @@ class Instruction:
                 self.expected = ['var', 'symb']
                 self.check_operands()
 
+                var = self.get_op_val(1)  # variable unused on purpose
                 type1 = self.get_op_type(1)
 
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, type1)
@@ -813,7 +810,6 @@ class Instruction:
                     exit(52)
 
                 self.jumper.current = self.jumper.labels[label_name]
-            # print(self.jumper.current)
 
             case 'JUMPIFEQ':
                 self.expected = ['label', 'symb', 'symb']
@@ -823,22 +819,17 @@ class Instruction:
                 symb1 = self.get_op_val(1)
                 symb2 = self.get_op_val(2)
 
+                type1 = self.get_op_type(1)
+                type2 = self.get_op_type(2)
+
+                if (type1 != type2) and (type1 != 'nil' and type2 != 'nil'):
+                    exit(53)
+
                 if label_name not in self.jumper.labels:
                     print("non existing label", file=sys.stderr)
                     exit(52)
 
-                if self.operands[1].type != self.operands[2].type:
-                    if self.operands[1].type != 'var' and self.operands[2].type != 'var':
-                        print("incompatible types", file=sys.stderr)
-                        exit(53)
-
-                if self.operands[1].type == 'bool':
-                    if symb1 == 'true':
-                        symb1 = 1
-                    else:
-                        symb1 = 0
-
-                if int(symb1) == int(symb2):
+                if symb1 == symb2:
 
                     self.jumper.current = self.jumper.labels[label_name]
                 else:
@@ -852,21 +843,18 @@ class Instruction:
                 symb1 = self.get_op_val(1)
                 symb2 = self.get_op_val(2)
 
+                type1 = self.get_op_type(1)
+                type2 = self.get_op_type(2)
+
+                if (type1 != type2) and (type1 != 'nil' and type2 != 'nil'):
+                    exit(53)
+
                 if label_name not in self.jumper.labels:
                     print("non existing label", file=sys.stderr)
                     exit(52)
 
-                if self.operands[1].type != self.operands[2].type:
-                    print("incompatible types", file=sys.stderr)
-                    exit(53)
+                if symb1 != symb2:
 
-                if self.operands[1].type == 'bool':
-                    if symb1 == 'true':
-                        symb1 = 1
-                    else:
-                        symb1 = 0
-
-                if int(symb1) != int(symb2):
                     self.jumper.current = self.jumper.labels[label_name]
                 else:
                     self.jumper.current += 1
@@ -876,15 +864,15 @@ class Instruction:
                 self.check_operands()
 
                 value1 = self.get_op_val(0)
+                type1 = self.get_op_type(0)
 
-                if not re.match(r'^[0-9]+$', value1):
+                if type1 != 'int':
+                    exit(53)
+
+                if int(value1) < 0 or int(value1) > 49:
                     exit(57)
 
-                if int(value1) < 0 or int(value1) > 49 or value1 is None:
-                    exit(57)
-
-                self.jumper.current = -1
-                exit(value1)
+                os._exit(int(value1))
 
             case 'DPRINT':
                 self.expected = ['symb']
