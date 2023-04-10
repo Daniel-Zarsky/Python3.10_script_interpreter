@@ -4,6 +4,7 @@ import argparse
 import sys
 import os
 
+
 class Variable:
     def __init__(self, frame, name, frames):
         self.value = None
@@ -30,7 +31,7 @@ class Variable:
 
     def set_value(self, value):
         self.value = value
-       #print('value set')
+    # print('value set')
 
 
 class Frames:
@@ -57,7 +58,7 @@ class Frames:
 
         self.temp[variable.name] = variable
 
-       #print(self.temp)
+    # print(self.temp)
 
     def add_to_glob(self, variable):
         self.glob[variable.name] = variable
@@ -80,24 +81,24 @@ class Frames:
 
     def exists(self, opcode, name):  # for defvar checking
 
-            if name in self.glob:
-                return True
+        if name in self.glob:
+            return True
 
-            if self.temp is not None and name in self.temp:
-                return True
+        if self.temp is not None and name in self.temp:
+            return True
 
-            i = 0
-            if len(self.local) != 0:
-                while i < len(self.local):
-                    if name in self.local[i]:
-                        return True
-                    i = i+1
+        i = 0
+        if len(self.local) != 0:
+            while i < len(self.local):
+                if name in self.local[i]:
+                    return True
+                i = i + 1
 
-            return False
+        return False
 
     def can_access(self, opcode, name, frame):
 
-        if opcode =='DEFVAR' or opcode == 'TYPE':
+        if opcode == 'DEFVAR' or opcode == 'TYPE':
             return True
         else:
             if frame == 'GF':
@@ -127,19 +128,24 @@ class Frames:
     def get_value(self, name, frame):
         if frame == 'GF':
 
-            if self.glob[name] is None:
+            if name not in self.glob:
                 print("value undefined", file=sys.stderr)
                 exit(55)
 
             return self.glob[name].value
         elif frame == 'LF':
-            if self.local[0][name] is None:
+            if len(self.local) > 0:
+                if name not in self.local[0]:
+                    print("value undefined", file=sys.stderr)
+                    exit(55)
+                else:
+                    return self.local[0][name].value
+            else:
                 print("value undefined", file=sys.stderr)
                 exit(55)
 
-            return self.local[0][name].value
-        elif frame == 'TF':
-            if self.temp[name] is None:
+        elif frame == 'TF' and self.temp is not None:
+            if name not in self.temp:
                 print("value undefined", file=sys.stderr)
                 exit(55)
 
@@ -154,8 +160,12 @@ class Frames:
             self.glob[name].set_value(value)
         elif frame == 'LF' and name in self.local:
             self.local[0][name].set_value(value)
-        elif frame == 'TF' and name in self.temp:
-            self.temp[name].set_value(value)
+        elif frame == 'TF' and self.temp is not None:
+            if name in self.temp:
+                self.temp[name].set_value(value)
+            else:
+                print("temporary not exists", file=sys.stderr)
+                exit(32)  # todo
         else:
             print("wrong frame set value", file=sys.stderr)
             exit(32)  # todo
@@ -182,7 +192,6 @@ class Instruction:
 
     def check_operands(self):
         # self.debug()
-
 
         op_count = 0
         for j in self.operands:
@@ -214,8 +223,8 @@ class Instruction:
                     exit(66)  # todo
 
                 if o.type == 'var' and (
-                not self.frames.can_access(self.opcode, o.value, o.frame)):
-                   # print('problem here')
+                        not self.frames.can_access(self.opcode, o.value, o.frame)):
+                    # print('problem here')
                     print("can not access the variable in operand", file=sys.stderr)  # no access to first
                     exit(54)  # todo
 
@@ -223,7 +232,6 @@ class Instruction:
                     if self.opcode != 'DEFVAR' and self.opcode != 'TYPE':
                         print("variable not exists", file=sys.stderr)  # no access to first
                         exit(54)  # todo
-
 
     def debug(self):
         print(self.opcode, end=" ")
@@ -233,7 +241,6 @@ class Instruction:
                 print(i.type, end=" ")
                 print(i.frame, end=" ")
                 print(i.value)
-
 
     def get_op_val(self, number):
         if self.operands[number] is not None:
@@ -267,7 +274,7 @@ class Instruction:
                 self.jumper.current += 1
 
             case 'CREATEFRAME':
-               # print('xreatefrafe')
+                # print('xreatefrafe')
                 self.expected = []
                 self.check_operands()
                 self.frames.createframe()
@@ -291,13 +298,13 @@ class Instruction:
                 self.expected = ['var']
                 self.check_operands()
                 var = Variable(self.operands[0].frame, self.operands[0].value, self.frames)
-              # print(var.value)
+                # print(var.value)
                 if var.frame == 'GF':
                     if not self.frames.exists(self.opcode, self.operands[0].value):
                         self.frames.add_to_glob(var)
                     else:
                         exit(52)
-                elif var.frame == 'TF':
+                elif var.frame == 'TF' and self.frames.temp is not None:
                     if var not in self.frames.temp:
                         self.frames.add_to_temp(var)
                     else:
@@ -325,6 +332,10 @@ class Instruction:
             case 'RETURN':
                 self.expected = []
                 self.check_operands()
+
+                if len(self.jumper.jump_back) == 0:
+                    print("empty calling stack", file=sys.stderr)
+                    exit(56)
 
                 self.jumper.current = self.jumper.jump_back[0]  # JUMP BACK
                 del self.jumper.jump_back[0]  # poP IT
@@ -358,13 +369,20 @@ class Instruction:
                 self.check_operands()
 
                 if self.operands[1].type != 'int' and self.operands[1].type != 'var' or (self.operands[2].type != 'int'
-                                                                                    and self.operands[2].type != 'var'):
-
+                                                                                         and self.operands[
+                                                                                             2].type != 'var'):
                     print("wrong operand type", file=sys.stderr)
                     exit(53)
 
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
+
+                if value1 is None or value2 is None:
+                    print("invalid operands", file=sys.stderr)
+                    exit(53)
+
+                if not re.match(r'^[0-9]+$', value2) or not re.match(r'^[0-9]+$', value1):
+                    exit(53)
 
                 result = int(value1) + int(value2)
 
@@ -376,12 +394,19 @@ class Instruction:
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
                 if self.operands[1].type != 'int' and self.operands[1].type != 'var' or (self.operands[2].type != 'int'
-                                                                                         and self.operands[2].type != 'var'):
+                                                                                         and self.operands[
+                                                                                             2].type != 'var'):
                     print("wrong operand type", file=sys.stderr)
                     exit(53)
-
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
+
+                if value1 is None or value2 is None:
+                    print("invalid operands", file=sys.stderr)
+                    exit(53)
+
+                if not re.match(r'^[0-9]+$', value2) or not re.match(r'^[0-9]+$', value1):
+                    exit(53)
 
                 result = int(value1) - int(value2)
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
@@ -392,12 +417,20 @@ class Instruction:
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
                 if self.operands[1].type != 'int' and self.operands[1].type != 'var' or (self.operands[2].type != 'int'
-                                                                                         and self.operands[2].type != 'var'):
+                                                                                         and self.operands[
+                                                                                             2].type != 'var'):
                     print("wrong operand type", file=sys.stderr)
                     exit(53)
 
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
+
+                if value1 is None or value2 is None:
+                    print("invalid operands", file=sys.stderr)
+                    exit(53)
+
+                if not re.match(r'^[0-9]+$', value2) or not re.match(r'^[0-9]+$', value1):
+                    exit(53)
 
                 result = int(value1) * int(value2)
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
@@ -417,13 +450,16 @@ class Instruction:
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
 
-                if int(value2) == 0:
-                    print("zero division", file=sys.stderr)
-                    exit(57)
-
                 if value1 is None or value2 is None:
                     print("operand with no value ", file=sys.stderr)
                     exit(53)
+
+                if not re.match(r'^[0-9]+$', value2) or not re.match(r'^[0-9]+$', value1):
+                    exit(53)
+
+                if int(value2) == 0:
+                    print("zero division", file=sys.stderr)
+                    exit(57)
 
                 result = int(value1) // int(value2)
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
@@ -441,6 +477,10 @@ class Instruction:
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
 
+                if value1 is None or value2 is None:
+                    print("operand with no value ", file=sys.stderr)
+                    exit(53)
+
                 result = value1 < value2
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
@@ -457,6 +497,10 @@ class Instruction:
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
 
+                if value1 is None or value2 is None:
+                    print("operand with no value ", file=sys.stderr)
+                    exit(53)
+
                 result = value1 > value2
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
@@ -468,6 +512,10 @@ class Instruction:
 
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
+
+                if value1 is None or value2 is None:
+                    print("operand with no value ", file=sys.stderr)
+                    exit(53)
 
                 result = value1 == value2
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
@@ -485,6 +533,10 @@ class Instruction:
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
 
+                if value1 is None or value2 is None:
+                    print("operand with no value ", file=sys.stderr)
+                    exit(53)
+
                 result = value1 and value2
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
@@ -501,6 +553,10 @@ class Instruction:
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
 
+                if value1 is None or value2 is None:
+                    print("operand with no value ", file=sys.stderr)
+                    exit(53)
+
                 result = value1 or value2
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
@@ -515,6 +571,9 @@ class Instruction:
                     exit(53)
 
                 value1 = self.get_op_val(1)
+                if value1 is None:
+                    print("operand with no value ", file=sys.stderr)
+                    exit(53)
 
                 result = not value1
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
@@ -525,10 +584,18 @@ class Instruction:
                 self.expected = ['var', 'symb']
                 self.check_operands()
 
-                value1 = int(self.get_op_val(1))
+                value1 = self.get_op_val(1)
+                if value1 is not None:
+                    if not re.match(r'^[0-9]+$', value1):
+                        exit(53)
+
+                    if int(value1) < 0 or int(value1) > 128:
+                        exit(53)
+                else:
+                    exit(3)
 
                 try:
-                    result = chr(value1)
+                    result = chr(int(value1))
                 except ValueError:
                     print("value out of range", file=sys.stderr)
                     exit(53)
@@ -543,11 +610,18 @@ class Instruction:
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
 
+                if value1 is None or value2 is None:
+                    print("invalid operands", file=sys.stderr)
+                    exit(53)
+
+                if not re.match(r'^[0-9]+$', value2):
+                    exit(53)
+
                 if int(value2) >= len(value1):
                     print("value out of range", file=sys.stderr)
                     exit(58)
 
-                char = value1[value2]
+                char = value1[int(value2)]
                 try:
                     result = ord(char)
                 except ValueError:
@@ -636,11 +710,16 @@ class Instruction:
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
 
+                if value1 is None or value2 is None:
+                    print("invalid operands", file=sys.stderr)
+                    exit(53)
+                if not re.match(r'^[0-9]+$', value2):
+                    exit(53)
                 if int(value2) >= len(value1):
                     print("value out of range", file=sys.stderr)
                     exit(53)
 
-                result = value1[value2]
+                result = value1[int(value2)]
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
 
                 self.jumper.current += 1
@@ -653,6 +732,10 @@ class Instruction:
                 symb1 = self.get_op_val(1)
                 symb2 = self.get_op_val(2)
 
+                if symb1 is None or var is None:
+                    print("invalid operands", file=sys.stderr)
+                    exit(53)
+
                 if not re.match(r'^[0-9]+$', symb1):
                     exit(53)
 
@@ -662,13 +745,9 @@ class Instruction:
                 if not isinstance(var, str):
                     exit(53)
 
-                if symb1 is None or var is None:
-                    print("invalid operands", file=sys.stderr)
-                    exit(53)
-
                 if int(symb1) >= len(var) or symb2 == '':
-                     print("value out of range", file=sys.stderr)
-                     exit(58)
+                    print("value out of range", file=sys.stderr)
+                    exit(58)
 
                 stra = var
                 posn = int(symb1)
@@ -712,7 +791,6 @@ class Instruction:
                 self.check_operands()
                 self.jumper.current += 1
 
-
             case 'JUMP':
                 self.expected = ['label']
                 self.check_operands()
@@ -723,9 +801,8 @@ class Instruction:
                     print("non existing label", file=sys.stderr)
                     exit(52)
 
-
                 self.jumper.current = self.jumper.labels[label_name]
-               # print(self.jumper.current)
+            # print(self.jumper.current)
 
             case 'JUMPIFEQ':
                 self.expected = ['label', 'symb', 'symb']
@@ -745,9 +822,9 @@ class Instruction:
 
                 if self.operands[1].type == 'bool':
                     if symb1 == 'true':
-                     symb1 = 1
+                        symb1 = 1
                     else:
-                     symb1 = 0
+                        symb1 = 0
 
                 if int(symb1) == int(symb2):
 
@@ -773,9 +850,9 @@ class Instruction:
 
                 if self.operands[1].type == 'bool':
                     if symb1 == 'true':
-                     symb1 = 1
+                        symb1 = 1
                     else:
-                     symb1 = 0
+                        symb1 = 0
 
                 if int(symb1) != int(symb2):
                     self.jumper.current = self.jumper.labels[label_name]
@@ -786,13 +863,18 @@ class Instruction:
                 self.expected = ['symb']
                 self.check_operands()
 
-                value1 = int(self.get_op_val(0))
-                if value1 < 0 or value1 > 49:
+                value1 = self.get_op_val(0)
+                if value1 is not None:
+                    if not re.match(r'^[0-9]+$', value1):
+                        exit(57)
+
+                    if int(value1) < 0 or int(value1) > 49 or value1 is None:
+                        exit(57)
+                else:
                     exit(57)
 
                 self.jumper.current = -1
                 exit(value1)
-
 
             case 'DPRINT':
                 self.expected = ['symb']
@@ -933,7 +1015,7 @@ class Read_source:
                     print("duplicate order", file=sys.stderr)
                     exit(32)
 
-            #instruction_list.sort(key=lambda x: x.order, reverse=False)
+            # instruction_list.sort(key=lambda x: x.order, reverse=False)
             instruction_list = sorted(instruction_list, key=lambda x: x.order, reverse=False)
 
         right_order = 0
@@ -943,12 +1025,12 @@ class Read_source:
 
         return instruction_list
 
+
 class Jumper:
     def __init__(self):
         self.current = 0
         self.jump_back = []
         self.labels = {}
-
 
     def extract_labels(self, in_list):
         for i in in_list:
@@ -958,6 +1040,7 @@ class Jumper:
                 else:
                     print("label redefinition", file=sys.stderr)
                     exit(52)
+
 
 class Interpreter:
 
@@ -979,19 +1062,19 @@ class Interpreter:
 
         jumper.extract_labels(self.in_list)
 
-        #print(jumper.labels)
+        # print(jumper.labels)
 
         while jumper.current < len(self.in_list):
 
-            #self.frames.debug()
-            #print(self.datastack)
+            # self.frames.debug()
+            # print(self.datastack)
             instruction = self.in_list[jumper.current]
-            #print(instruction.opcode, file=sys.stderr)
-            #print(instruction.opcode)
+            # print(instruction.opcode, file=sys.stderr)
+            # print(instruction.opcode)
             if instruction is None:
                 break
             else:
-                #instruction.debug()
+                # instruction.debug()
                 instruction.execute()
 
 
@@ -1007,7 +1090,6 @@ args = parser.parse_args()
 if args.source_file is not None and args.input_file is not None:
     if args.source_file:
         if not os.path.isfile(args.source_file):
-
             exit(11)
     if args.input_file:
         if not os.path.isfile(args.input_file):
