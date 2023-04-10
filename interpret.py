@@ -140,35 +140,49 @@ class Frames:
             if len(self.local) > 0:
                 if name not in self.local[0]:
                     print("value undefined", file=sys.stderr)
-                    exit(55)
+                    exit(54)
                 else:
                     return self.local[0][name].get_value()
             else:
                 print("wrong frame", file=sys.stderr)
-                exit(55)
+                exit(54)
 
-        elif frame == 'TF' and self.temp is not None:
-            if name not in self.temp:
+        elif frame == 'TF':
+            if self.temp is not None:
+                if name not in self.temp:
+                    print("wrong frame or temporary not exists", file=sys.stderr)
+                    exit(54)
+                else:
+                    return self.temp[name].get_value
+            else:
                 print("wrong frame or temporary not exists", file=sys.stderr)
                 exit(55)
 
-            return self.temp[name].get_value
         else:
             print("wrong frame get value", file=sys.stderr)
             exit(32)  # todo
 
     def set_value(self, frame, name, value):
 
-        if frame == 'GF' and name in self.glob:
-            self.glob[name].set_value(value)
-        elif frame == 'LF' and name in self.local:
-            self.local[0][name].set_value(value)
-        elif frame == 'TF' and self.temp is not None:
-            if name in self.temp:
-                self.temp[name].set_value(value)
+        if frame == 'GF':
+            if name in self.glob:
+                self.glob[name].set_value(value)
+            else:
+                exit(54)
+        elif frame == 'LF':
+            if name in self.local:
+                self.local[0][name].set_value(value)
+            else:
+                exit(54)
+        elif frame == 'TF':
+            if self.temp is not None:
+                if name in self.temp:
+                    self.temp[name].set_value(value)
+                else:
+                    exit(54)
             else:
                 print("temporary not exists", file=sys.stderr)
-                exit(32)  # todo
+                exit(55)  # todo
         else:
             print("wrong frame set value", file=sys.stderr)
             exit(32)  # todo
@@ -231,11 +245,6 @@ class Instruction:
                     print("can not access the variable in operand", file=sys.stderr)  # no access to first
                     exit(54)  # todo
 
-                if o.type == 'var' and not self.frames.exists(self.opcode, o.value):
-                    if self.opcode != 'DEFVAR' and self.opcode != 'TYPE':
-                        print("variable not exists", file=sys.stderr)  # no access to first
-                        exit(54)  # todo
-
     def debug(self):
         print(self.opcode, end=" ")
         print(self.order)
@@ -252,6 +261,9 @@ class Instruction:
             else:
                 value = self.operands[number].value
 
+            if value is None:
+                exit(56)
+
             return value
         else:
             print("wrong operand number ", file=sys.stderr)
@@ -264,15 +276,8 @@ class Instruction:
                 self.expected = ['var', 'symb']
                 self.check_operands()
 
-                if self.operands[1].type == 'var':
-
-                    value = self.frames.get_value(self.operands[1].value, self.operands[1].frame)
-                    self.frames.set_value(self.operands[0].frame, self.operands[0].value,
-                                          value)  # asign variable to the first operand
-                else:
-
-                    self.frames.set_value(self.operands[0].frame, self.operands[0].value,
-                                          self.operands[1].value)  # asign constant to first operand
+                value1 = self.get_op_val(1)
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, value1)
 
                 self.jumper.current += 1
 
@@ -314,7 +319,7 @@ class Instruction:
                         exit(52)
                 else:
                     print("error can add var only to tf or gf ", file=sys.stderr)
-                    exit(32)  # todo
+                    exit(56)  # todo
 
                 self.jumper.current += 1
 
@@ -574,9 +579,6 @@ class Instruction:
                     exit(53)
 
                 value1 = self.get_op_val(1)
-                if value1 is None:
-                    print("operand with no value ", file=sys.stderr)
-                    exit(53)
 
                 result = not value1
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
@@ -680,12 +682,13 @@ class Instruction:
                 self.expected = ['var', 'symb', 'symb']
                 self.check_operands()
 
+                if self.operands[1].type != 'string' and self.operands[1].type != 'var' or (self.operands[2].type != 'string'
+                                                                                         and self.operands[
+                                                                                             2].type != 'var'):
+                    print("wrong operand type", file=sys.stderr)
+                    exit(53)
                 value1 = self.get_op_val(1)
                 value2 = self.get_op_val(2)
-
-                if type(value1) is not str or type(value2) is not str:
-                    print("wrong value for concat", file=sys.stderr)
-                    exit(53)
 
                 result = value1 + value2
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
@@ -696,7 +699,11 @@ class Instruction:
                 self.expected = ['var', 'symb']
                 self.check_operands()
 
+                if self.operands[1].type != 'string' and self.operands[1].type != 'var':
+                    exit(53)
+
                 value1 = self.get_op_val(1)
+
                 if value1 is None or value1 == '':
                     result = 0
                 else:
@@ -820,8 +827,9 @@ class Instruction:
                     exit(52)
 
                 if self.operands[1].type != self.operands[2].type:
-                    print("incompatible types", file=sys.stderr)
-                    exit(53)
+                    if self.operands[1].type != 'var' and self.operands[2].type != 'var':
+                        print("incompatible types", file=sys.stderr)
+                        exit(53)
 
                 if self.operands[1].type == 'bool':
                     if symb1 == 'true':
@@ -867,13 +875,11 @@ class Instruction:
                 self.check_operands()
 
                 value1 = self.get_op_val(0)
-                if value1 is not None:
-                    if not re.match(r'^[0-9]+$', value1):
-                        exit(57)
 
-                    if int(value1) < 0 or int(value1) > 49 or value1 is None:
-                        exit(57)
-                else:
+                if not re.match(r'^[0-9]+$', value1):
+                    exit(57)
+
+                if int(value1) < 0 or int(value1) > 49 or value1 is None:
                     exit(57)
 
                 self.jumper.current = -1
