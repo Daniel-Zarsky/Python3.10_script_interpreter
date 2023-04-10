@@ -12,7 +12,6 @@ class Variable:
         self.name = name
         self.type = None
 
-
     def get_frame(self):  # check when reading value from input
         return self.frame
 
@@ -28,21 +27,22 @@ class Variable:
     def get_name(self):  # check when reading value from input
         return self.name
 
-    def set_value(self, value):
+    def set_value(self, value, type):
+        self.value = value
+        if type is None:
+            if re.match(r'^[0-9]+$', str(value)):
+                self.type = 'int'
 
+            elif re.match(r'^(true|false)$', str(value)):
+                self.type = 'bool'
 
-        if re.match(r'^[0-9]+$', str(value)):
-            self.type = 'int'
-            self.value = int(value)
-        elif re.match(r'^(true|false)$', str(value)):
-            self.type = 'bool'
-            self.value = value
-        elif re.match(r'^(nil)$', str(value)):
-            self.type = 'nil'
-            self.value = 'nil'
+            elif re.match(r'^(nil)$', str(value)):
+                self.type = 'nil'
+
+            else:
+                self.type = 'string'
         else:
-            self.type = 'string'
-            self.value = str(value)
+            self.type = type
 
 
 class Frames:
@@ -95,6 +95,21 @@ class Frames:
         self.temp = self.local[0]
         del self.local[0]
 
+    def exists(self, name):  # for defvar checking
+
+        if name in self.glob:
+            return True
+
+        if self.temp is not None and name in self.temp:
+            return True
+
+        i = 0
+        while i < len(self.local):
+            if name in self.local[i]:
+                return True
+            i += 1
+
+        return False
 
     def can_access(self, opcode, name, frame):
 
@@ -173,22 +188,22 @@ class Frames:
             return self.temp[name].get_value()
 
 
-    def set_value(self, frame, name, value):
+    def set_value(self, frame, name, value, type):
 
         if frame == 'GF':
             if name in self.glob:
-                self.glob[name].set_value(value)
+                self.glob[name].set_value(value, type)
             else:
                 exit(54)
         elif frame == 'LF':
             if name in self.local:
-                self.local[0][name].set_value(value)
+                self.local[0][name].set_value(value, type)
             else:
                 exit(54)
         elif frame == 'TF':
             if self.temp is not None:
                 if name in self.temp:
-                    self.temp[name].set_value(value)
+                    self.temp[name].set_value(value, type)
                 else:
                     exit(54)
             else:
@@ -240,7 +255,35 @@ class Instruction:
                 if o.type == 'var' and (not self.frames.can_access(self.opcode, o.value, o.frame)):
                     # print('problem here')
                     print("can not access the variable in operand", file=sys.stderr)  # no access to first
-                    exit(54)  # todo
+                    exit(54)
+                if o.type == 'string':
+                   # print("string before processing " + o.value, file=sys.stderr)
+                    escapePattern = re.compile(r'(\\[0-9]{3})', re.UNICODE)
+
+                    parts = escapePattern.split(o.value)
+                    value = ''
+
+                    html_escape_table = {
+                        "&": "&amp;",
+                        '"': "&quot;",
+                        "'": "&apos;",
+                        ">": "&gt;",
+                        "<": "&lt;",
+                    }
+
+                    for part in parts:
+                        if escapePattern.match(part):
+                            part = chr(int(part[1:]))  # From \065 -> 065 -> 65 -> A
+
+                        value += part
+
+                    for c in value:
+                        if c in html_escape_table:
+                            value.replace(c, html_escape_table[c])
+
+                    o.value = value
+                   # print("string after processing" + o.value, file=sys.stderr)
+
 
     def debug(self):
         print(self.opcode, end=" ", file=sys.stderr)
@@ -281,7 +324,8 @@ class Instruction:
                 self.check_operands()
 
                 value1 = self.get_op_val(1)
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, value1)
+                type1 = self.get_op_type(1)
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, value1, type1)
 
                 self.jumper.current += 1
 
@@ -332,7 +376,7 @@ class Instruction:
                 if self.operands[0]. type != 'label':
                     exit(53)
 
-                value1 = self.get_op_val(0)  # get label name
+                value1 = self.operands[0].value # get label name
 
                 where_to_jump_back = self.jumper.current + 1  # where will we continue after return
                 self.jumper.jump_back.insert(0, where_to_jump_back)  # STORE IT IN STACK
@@ -370,7 +414,7 @@ class Instruction:
                 self.check_operands()
                 if len(self.datastack) != 0:
                     self.frames.set_value(self.operands[0].frame, self.operands[0].value,
-                                          self.datastack[0])
+                                          self.datastack[0], None)
                     del self.datastack[0]
                 else:
                     exit(56)
@@ -390,8 +434,8 @@ class Instruction:
                     exit(53)
 
                 result = int(value1) + int(value2)
-                print(f"added {result}", file=sys.stderr)
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result, 'int')
 
                 self.jumper.current += 1
 
@@ -409,7 +453,7 @@ class Instruction:
 
 
                 result = int(value1) - int(value2)
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result, 'int')
 
                 self.jumper.current += 1
 
@@ -426,7 +470,7 @@ class Instruction:
                     exit(53)
 
                 result = int(value1) * int(value2)
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result, 'int')
 
                 self.jumper.current += 1
 
@@ -445,7 +489,7 @@ class Instruction:
                     exit(57)
 
                 result = int(value1) // int(value2)
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result, 'int')
 
                 self.jumper.current += 1
 
@@ -466,7 +510,7 @@ class Instruction:
                     result = 'true'
                 else:
                     result = 'false'
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result, 'bool')
 
                 self.jumper.current += 1
 
@@ -491,7 +535,7 @@ class Instruction:
                     result = 'true'
                 else:
                     result = 'false'
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result, 'bool')
 
                 self.jumper.current += 1
 
@@ -504,15 +548,27 @@ class Instruction:
                 type1 = self.get_op_type(1)
                 type2 = self.get_op_type(2)
 
-                if type1 != type2:
+                if (type1 != type2) and (type1 != 'nil' and type2 != 'nil'):
                     exit(53)
 
-                result = value1 == value2
+
+
+                if type1 == 'int':
+                    if value2 == 'nil':
+                        value2 = 0
+                    result = int(value1) == int(value2)
+                elif type2 == 'int':
+                    if value1 == 'nil':
+                        value1 = 0
+                    result = int(value1) == int(value2)
+                else:
+                    result = value1 == value2
+
                 if result is True:
                     result = 'true'
                 else:
                     result = 'false'
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result, 'bool')
 
                 self.jumper.current += 1
 
@@ -543,7 +599,7 @@ class Instruction:
                     result1 = 'true'
                 else:
                     result1 = 'false'
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result1)
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result1, 'bool')
 
                 self.jumper.current += 1
 
@@ -576,7 +632,7 @@ class Instruction:
                 else:
                     result1 = 'false'
 
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result1)
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result1, 'bool')
 
                 self.jumper.current += 1
 
@@ -597,7 +653,7 @@ class Instruction:
                     result1 = 'true'
                 else:
                     result1 = 'false'
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result1)
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result1, 'bool')
 
                 self.jumper.current += 1
 
@@ -618,7 +674,7 @@ class Instruction:
                     print("value out of range", file=sys.stderr)
                     exit(53)
 
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result, 'string')
 
                 self.jumper.current += 1
 
@@ -646,7 +702,7 @@ class Instruction:
                     print("value out of range", file=sys.stderr)
                     exit(53)
 
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result, 'int')
 
                 self.jumper.current += 1
 
@@ -655,9 +711,13 @@ class Instruction:
                 self.check_operands()
 
                 try:
-                    load = input()
-                    type = self.operands[1].type
+                    if self.input is None:
+                        load = input(sys.stdin.buffer)
+                    else:
+                        load = input(self.input)
 
+                    type = self.operands[1].value
+                    print(f"type is  {type}", file=sys.stderr)
                     if type == 'int':
                         result = int(load)
                     elif type == 'bool':
@@ -669,9 +729,10 @@ class Instruction:
                         result = load
 
                 except EOFError:
-                    result = 'nil'
+                    result = ''
 
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+                print(f"result is  {result}", file=sys.stderr)
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result, 'type')
 
                 self.jumper.current += 1
 
@@ -700,7 +761,7 @@ class Instruction:
                     exit(53)
 
                 result = value1 + value2
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result, 'string')
 
                 self.jumper.current += 1
 
@@ -719,7 +780,7 @@ class Instruction:
                 else:
                     result = len(value1)
 
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result, 'int')
 
                 self.jumper.current += 1
 
@@ -741,7 +802,7 @@ class Instruction:
                     exit(58)
 
                 result = value1[int(value2)]
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result)
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result, 'string')
 
                 self.jumper.current += 1
 
@@ -767,7 +828,7 @@ class Instruction:
                 posn = int(symb1)
                 nc = symb2[0]
                 var = var[:posn] + nc + var[posn + 1:]
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, var)
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, var, 'string')
 
                 self.jumper.current += 1
 
@@ -778,7 +839,7 @@ class Instruction:
                 var = self.get_op_val(1)  # variable unused on purpose
                 type1 = self.get_op_type(1)
 
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, type1)
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, type1, 'string')
 
                 self.jumper.current += 1
 
@@ -805,8 +866,8 @@ class Instruction:
                 self.check_operands()
 
                 label_name = self.operands[0].value
-                symb1 = self.get_op_val(1)
-                symb2 = self.get_op_val(2)
+                value1 = self.get_op_val(1)
+                value2 = self.get_op_val(2)
 
                 type1 = self.get_op_type(1)
                 type2 = self.get_op_type(2)
@@ -818,8 +879,18 @@ class Instruction:
                     print("non existing label", file=sys.stderr)
                     exit(52)
 
-                if int(symb1) == int(symb2):
-
+                if type1 == 'int':
+                    if value2 == 'nil':
+                        value2 = 0
+                    result = int(value1) == int(value2)
+                elif type2 == 'int':
+                    if value1 == 'nil':
+                        value1 = 0
+                if type1 == 'int' or type2 == 'int':
+                    result = int(value1) == int(value2)
+                else:
+                    result = value1 == value2
+                if result:
                     self.jumper.current = self.jumper.labels[label_name]
                 else:
                     self.jumper.current += 1
@@ -942,7 +1013,7 @@ class Read_source:
                         exit(32)
                 except KeyError:
                     print("error while checking arguments", file=sys.stderr)
-                    exit(31)  # todo
+                    exit(31)
 
     def fill_list(self):
 
