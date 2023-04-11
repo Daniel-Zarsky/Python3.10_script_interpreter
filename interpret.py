@@ -104,15 +104,20 @@ class Frames:
         self.temp = self.local[0]
         del self.local[0]
 
-    def exists(self, name):  # for defvar checking
+    def exists(self, name, frame):  # for defvar checking
+        if frame == 'GF':
+            if name in self.glob:
+                print("je v globalu ", file=sys.stderr)
+                return True
 
-        if name in self.glob:
-            print("je v globalu ", file=sys.stderr)
-            return True
-
-        if self.temp is not None and name in self.temp:
-            print("je v temporary ", file=sys.stderr)
-            return True
+        if frame == 'TF':
+            if self.temp is not None and name in self.temp:
+                print("je v temporary ", file=sys.stderr)
+                return True
+        if frame == 'LF':
+            if len(self.local) > 0:
+                if name in self.local[0]:
+                    return True
 
 
 
@@ -354,39 +359,41 @@ class Instruction:
                 self.check_operands()
                 var = Variable(self.operands[0].frame, self.operands[0].value)
                 # print(var.value)
-                if not self.frames.exists(self.operands[0].value):
+                if not self.frames.exists(self.operands[0].value, self.operands[0].frame):
                     if var.frame == 'GF':
                         self.frames.add_to_glob(var)
                     elif var.frame == 'TF' and self.frames.temp is not None:
                         if var not in self.frames.temp:
                             self.frames.add_to_temp(var)
                         else:
+                            print("found 2 ", file=sys.stderr)
                             exit(52)
                     else:
                         if self.frames.locals > 0:
                             self.frames.add_to_local(var)
                         else:
-
-                            exit(52)
+                            print("found 1 ", file=sys.stderr)
+                            exit(55)
 
                 else:
-                    print("kokot", file=sys.stderr)
+                    print("existuje", file=sys.stderr)
                     exit(52)
                 self.jumper.current += 1
 
             case 'CALL':
                 self.expected = ['label']
                 self.check_operands()
-                if self.operands[0].type != 'label':
+                if self.operands[0].type != 'label': # typ je label
                     exit(53)
 
-                value1 = self.operands[0].value  # get label name
-
-                where_to_jump_back = self.jumper.current + 1  # where will we continue after return
-                self.jumper.jump_back.insert(0, where_to_jump_back)  # STORE IT IN STACK
+                value1 = self.operands[0].value  # label existuje
                 if value1 not in self.jumper.labels:
                     print("non existing label", file=sys.stderr)
                     exit(52)
+
+                where_to_jump_back = self.jumper.current + 1  # where will we continue after return
+                self.jumper.jump_back.insert(0, where_to_jump_back)  # STORE IT IN STACK
+
                 #print(f"jump_back {self.jumper.jump_back}", file=sys.stderr)
                 self.jumper.current = self.jumper.labels[value1]  # SET CURRENT TO LABEL ORDER VALUE
 
@@ -737,7 +744,7 @@ class Instruction:
                     if line != 'true':
                         result = 'false'
                     else:
-                        result = line
+                        result = 'true'
                 else:
                     result = line
 
@@ -752,7 +759,14 @@ class Instruction:
                 self.check_operands()
 
                 value = self.get_op_val(0)
-                print(value, end=" ")
+                type1 = self.get_op_type(0)
+
+                print(f"{value}", file=sys.stderr)
+                if value == 'nil':
+                    print("", end='')
+                else:
+                    print(value, end='')
+
                 self.jumper.current += 1
 
             case 'CONCAT':
@@ -907,8 +921,8 @@ class Instruction:
                 self.check_operands()
 
                 label_name = self.operands[0].value
-                symb1 = self.get_op_val(1)
-                symb2 = self.get_op_val(2)
+                value1 = self.get_op_val(1)
+                value2 = self.get_op_val(2)
 
                 type1 = self.get_op_type(1)
                 type2 = self.get_op_type(2)
@@ -920,8 +934,14 @@ class Instruction:
                     print("non existing label", file=sys.stderr)
                     exit(52)
 
-                if symb1 != symb2:
-
+                if type1 == 'int' or type2 == 'int':
+                    if (type1 == 'nil') or (type2 == 'nil'):
+                        result = False
+                    else:
+                        result = int(value1) != int(value2)
+                else:
+                    result = value1 != value2
+                if result:
                     self.jumper.current = self.jumper.labels[label_name]
                 else:
                     self.jumper.current += 1
@@ -939,7 +959,7 @@ class Instruction:
                 if int(value1) < 0 or int(value1) > 49:
                     exit(57)
 
-                os._exit(int(value1))
+                sys.exit(int(value1))
 
             case 'DPRINT':
                 self.expected = ['symb']
@@ -1103,6 +1123,14 @@ class Jumper:
         self.labels = {}
         self.input_index = 0
 
+    def debug(self):
+        print("current")
+        print(self.current)
+        print('labels')
+        print(self.labels)
+        print("jump back")
+        print(self.jump_back)
+
     def extract_labels(self, in_list):
         for i in in_list:
             if i.opcode.upper() == 'LABEL':
@@ -1137,10 +1165,13 @@ class Interpreter:
 
         while jumper.current < len(self.in_list):
 
+            #jumper.debug()
             # self.frames.debug()
             # print(self.datastack)
             instruction = self.in_list[jumper.current]
-            # print(instruction.opcode, file=sys.stderr)
+           # print(instruction.order, end='')
+            #print(instruction.opcode)
+            #print(instruction.opcode, file=sys.stderr)
             # print(instruction.opcode)
             if instruction is None:
                 break
