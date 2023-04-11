@@ -529,14 +529,11 @@ class Instruction:
                 if (type1 != type2) and (type1 != 'nil' and type2 != 'nil'):
                     exit(53)
 
-                if type1 == 'int':
-                    if value2 == 'nil':
-                        value2 = 0
-                    result = int(value1) == int(value2)
-                elif type2 == 'int':
-                    if value1 == 'nil':
-                        value1 = 0
-                    result = int(value1) == int(value2)
+                if type1 == 'int' or type2 == 'int':
+                    if (type1 == 'nil') or (type2 == 'nil'):
+                        result = False
+                    else:
+                        result = int(value1) == int(value2)
                 else:
                     result = value1 == value2
 
@@ -1135,7 +1132,7 @@ def replace_unicode_escape_sequences(s):
         ">": "&gt;",
         "<": "&lt;",
         " ": "",
-        "\\\\": "",
+        "\\": "",
         "#": "",
     }
 
