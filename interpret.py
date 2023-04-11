@@ -252,16 +252,17 @@ class Instruction:
             if o is not None:
                 if o.type == 'var' and (not self.frames.can_access(self.opcode, o.value, o.frame)):
                     # print('problem here')
-                    print("can not access the variable in operand", file=sys.stderr)  # no access to first
+
                     exit(54)
 
                 if o.type == 'string':
-                    # print("string before processing " + o.value, file=sys.stderr
 
-                    if o.value is not None:
-                        o.value = replace_unicode_escape_sequences(o.value)
+                    if o.value is  None:
+                        o.value = ''
+                    print("string before processing " + o.value, file=sys.stderr)
 
-                    # print("string after processing" + o.value, file=sys.stderr)
+                    o.value = replace_unicode_escape_sequences(o.value)
+                    print("string after processing" + o.value, file=sys.stderr)
 
     def debug(self):
         print(self.opcode, end=" ", file=sys.stderr)
@@ -859,15 +860,12 @@ class Instruction:
                     print("non existing label", file=sys.stderr)
                     exit(52)
 
-                if type1 == 'int':
-                    if value2 == 'nil':
-                        value2 = 0
-                    result = int(value1) == int(value2)
-                elif type2 == 'int':
-                    if value1 == 'nil':
-                        value1 = 0
+
                 if type1 == 'int' or type2 == 'int':
-                    result = int(value1) == int(value2)
+                    if (type1 == 'nil') or (type2 =='nil'):
+                        result = False
+                    else:
+                        result = int(value1) == int(value2)
                 else:
                     result = value1 == value2
                 if result:
@@ -1129,7 +1127,7 @@ def replace_unicode_escape_sequences(s):
     import re
 
     # Regular expression pattern to match Unicode escape sequences
-    pattern = r'\\u[0-9a-fA-F]{4}'
+    pattern = r'\\[0-9]{3}'
     html_escape_table = {
         "&": "&amp;",
         '"': "&quot;",
@@ -1146,7 +1144,7 @@ def replace_unicode_escape_sequences(s):
         Callback function to replace a matched Unicode escape sequence with its corresponding character.
         """
         escape_sequence = match.group(0)
-        unicode_char = chr(int(escape_sequence[2:], 16))
+        unicode_char = chr(int(escape_sequence[2:], 10))
         return unicode_char
 
 
