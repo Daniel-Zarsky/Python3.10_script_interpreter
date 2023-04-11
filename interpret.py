@@ -51,14 +51,15 @@ class Frames:
         self.temp = None
         self.glob = {}
         self.defined = {}
+        self.locals = 0
 
     def debug(self):
-        print('temp')
-        print(self.temp)
-        print('glob')
-        print(self.glob)
-        print('top local')
-        print(self.local)
+        print('temp', file=sys.stderr )
+        print(self.temp,  file=sys.stderr)
+        print('glob',  file=sys.stderr)
+        print(self.glob,  file=sys.stderr)
+        print('top local',  file=sys.stderr)
+        print(self.local,  file=sys.stderr)
 
     def createframe(self):
         self.temp = {}
@@ -78,12 +79,19 @@ class Frames:
         self.defined[variable.name] = variable
         self.glob[variable.name] = variable
 
+    def add_to_local(self, variable):
+
+        self.defined[variable.name] = variable
+        new_var ={variable.name : variable}
+        self.local[0].update(new_var)
+
     def pushframe(self):
 
         if self.temp is None:
             print("empty temporary", file=sys.stderr)
             exit(55)
 
+        self.locals += 1
         self.local.insert(0, self.temp)
         self.temp = None
 
@@ -92,22 +100,22 @@ class Frames:
             print("empty local", file=sys.stderr)
             exit(55)
 
+        self.locals -= 1
         self.temp = self.local[0]
         del self.local[0]
 
     def exists(self, name):  # for defvar checking
 
         if name in self.glob:
+            print("je v globalu ", file=sys.stderr)
             return True
 
         if self.temp is not None and name in self.temp:
+            print("je v temporary ", file=sys.stderr)
             return True
 
-        i = 0
-        while i < len(self.local):
-            if name in self.local[i]:
-                return True
-            i += 1
+
+
 
         return False
 
@@ -158,7 +166,11 @@ class Frames:
                     print("value undefined", file=sys.stderr)
                     exit(54)
                 else:
+                    #print("got value", file=sys.stderr)
+                    value4 =self.local[0][name].get_value()
+                    #print(f"got value {value4}", file=sys.stderr)
                     return self.local[0][name].get_value()
+
             else:
                 print("wrong frame", file=sys.stderr)
                 exit(54)
@@ -182,9 +194,9 @@ class Frames:
         if frame == 'GF':
             return self.glob[name].get_type()
         elif frame == 'LF':
-            return self.local[0][name].get_value()
+            return self.local[0][name].get_type()
         elif frame == 'TF':
-            return self.temp[name].get_value()
+            return self.temp[name].get_type()
 
     def set_value(self, frame, name, value, type):
 
@@ -192,17 +204,23 @@ class Frames:
             if name in self.glob:
                 self.glob[name].set_value(value, type)
             else:
+                print("tady", file=sys.stderr)
                 exit(54)
         elif frame == 'LF':
-            if name in self.local:
+            if name in self.local[0]:
                 self.local[0][name].set_value(value, type)
+                #print(f"value set {value}", file=sys.stderr)
+                value2 = self.local[0][name].get_value()
+                #print(f"value actual {value2}", file=sys.stderr)
             else:
+                print("tu", file=sys.stderr)
                 exit(54)
         elif frame == 'TF':
             if self.temp is not None:
                 if name in self.temp:
                     self.temp[name].set_value(value, type)
                 else:
+                    print("tudy", file=sys.stderr)
                     exit(54)
             else:
                 print("temporary not exists", file=sys.stderr)
@@ -251,13 +269,13 @@ class Instruction:
         for o in self.operands:
             if o is not None:
                 if o.type == 'var' and (not self.frames.can_access(self.opcode, o.value, o.frame)):
-                    # print('problem here')
+
 
                     exit(54)
 
                 if o.type == 'string':
 
-                    if o.value is  None:
+                    if o.value is None:
                         o.value = ''
                     print("string before processing " + o.value, file=sys.stderr)
 
@@ -345,9 +363,14 @@ class Instruction:
                         else:
                             exit(52)
                     else:
-                        print("error can add var only to tf or gf ", file=sys.stderr)
-                        exit(56)  # todo
+                        if self.frames.locals > 0:
+                            self.frames.add_to_local(var)
+                        else:
+
+                            exit(52)
+
                 else:
+                    print("kokot", file=sys.stderr)
                     exit(52)
                 self.jumper.current += 1
 
@@ -364,7 +387,7 @@ class Instruction:
                 if value1 not in self.jumper.labels:
                     print("non existing label", file=sys.stderr)
                     exit(52)
-
+                #print(f"jump_back {self.jumper.jump_back}", file=sys.stderr)
                 self.jumper.current = self.jumper.labels[value1]  # SET CURRENT TO LABEL ORDER VALUE
 
             case 'RETURN':
@@ -484,7 +507,6 @@ class Instruction:
 
                 if (type1 != type2):
                     exit(53)
-
 
                 if (type1 == 'nil') or (type2 == 'nil'):
                     exit(53)
@@ -722,7 +744,6 @@ class Instruction:
                 print(f"result is  {result}", file=sys.stderr)
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result, type2)
 
-
                 self.jumper.current += 1
 
             case 'WRITE':
@@ -731,9 +752,7 @@ class Instruction:
                 self.check_operands()
 
                 value = self.get_op_val(0)
-
-                print(value, end="")
-
+                print(value, end=" ")
                 self.jumper.current += 1
 
             case 'CONCAT':
@@ -871,9 +890,8 @@ class Instruction:
                     print("non existing label", file=sys.stderr)
                     exit(52)
 
-
                 if type1 == 'int' or type2 == 'int':
-                    if (type1 == 'nil') or (type2 =='nil'):
+                    if (type1 == 'nil') or (type2 == 'nil'):
                         result = False
                     else:
                         result = int(value1) == int(value2)
@@ -954,7 +972,7 @@ class Read_source:
 
     def load(self):
         source_file = self.source
-        print(f"source {source_file}", file=sys.stderr)
+        #print(f"source {source_file}", file=sys.stderr)
 
         if self.source is None:
             try:
@@ -1129,6 +1147,8 @@ class Interpreter:
             else:
                 # instruction.debug()
                 instruction.execute()
+
+
 def replace_unicode_escape_sequences(s):
     """
     Replaces Unicode escape sequences in a string with their corresponding characters.
@@ -1158,13 +1178,11 @@ def replace_unicode_escape_sequences(s):
         unicode_char = chr(int(escape_sequence[2:], 10))
         return unicode_char
 
-
     # Use regex to find all Unicode escape sequences and replace them
     result = re.sub(pattern, replace_unicode, s)
     for c in result:
         if c in html_escape_table:
             result.replace(c, html_escape_table[c])
-
 
     return result
 
