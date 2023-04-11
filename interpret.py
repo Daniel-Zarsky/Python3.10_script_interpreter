@@ -938,13 +938,14 @@ class Instruction:
                     if (type1 == 'nil') or (type2 == 'nil'):
                         result = False
                     else:
-                        result = int(value1) != int(value2)
+                        result = int(value1) == int(value2)
                 else:
-                    result = value1 != value2
+                    result = value1 == value2
+
                 if result:
-                    self.jumper.current = self.jumper.labels[label_name]
-                else:
                     self.jumper.current += 1
+                else:
+                    self.jumper.current = self.jumper.labels[label_name]
 
             case 'EXIT':
                 self.expected = ['symb']
