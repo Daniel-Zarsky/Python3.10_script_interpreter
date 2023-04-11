@@ -113,7 +113,6 @@ class Frames:
 
     def can_access(self, opcode, name, frame):
 
-
         if opcode == 'DEFVAR' or opcode == 'TYPE':
             return True
         else:
@@ -131,7 +130,7 @@ class Frames:
                     else:
                         return False
                 else:
-                   exit(55)
+                    exit(55)
             elif frame == 'TF':
                 if self.temp is None:
                     print('TF after push', file=sys.stderr)
@@ -187,7 +186,6 @@ class Frames:
         elif frame == 'TF':
             return self.temp[name].get_value()
 
-
     def set_value(self, frame, name, value, type):
 
         if frame == 'GF':
@@ -222,7 +220,7 @@ class Operand:
 
 
 class Instruction:
-    def __init__(self, order, opcode, operands, frames, labels, input_file, datastack, jumper):
+    def __init__(self, order, opcode, operands, frames, labels, input_file, datastack, jumper, input):
         self.order = order
         self.opcode = opcode
         self.operands = operands
@@ -231,6 +229,7 @@ class Instruction:
         self.labels = labels
         self.input = input_file
         self.jumper = jumper
+        self.input = input
         self.expected = None  # expected types of arguments
 
     def check_operands(self):
@@ -249,7 +248,6 @@ class Instruction:
             print("missing argument", file=sys.stderr)
             exit(32)
 
-
         for o in self.operands:
             if o is not None:
                 if o.type == 'var' and (not self.frames.can_access(self.opcode, o.value, o.frame)):
@@ -258,7 +256,7 @@ class Instruction:
                     exit(54)
 
                 if o.type == 'string':
-                   # print("string before processing " + o.value, file=sys.stderr)
+                    # print("string before processing " + o.value, file=sys.stderr)
                     escapePattern = re.compile(r'(\\[0-9]{3})', re.UNICODE)
 
                     parts = escapePattern.split(o.value)
@@ -286,8 +284,7 @@ class Instruction:
                             value.replace(c, html_escape_table[c])
 
                     o.value = value
-                   # print("string after processing" + o.value, file=sys.stderr)
-
+                # print("string after processing" + o.value, file=sys.stderr)
 
     def debug(self):
         print(self.opcode, end=" ", file=sys.stderr)
@@ -309,6 +306,7 @@ class Instruction:
         else:
             print("wrong operand number ", file=sys.stderr)
             exit(55)  # todo
+
     def get_op_type(self, number):
         if self.operands[number] is not None:
             if self.operands[number].type == 'var':
@@ -320,6 +318,7 @@ class Instruction:
         else:
             print("wrong operand number ", file=sys.stderr)
             exit(55)  # todo
+
     def execute(self):
         match self.opcode.upper():
             case 'MOVE':
@@ -361,7 +360,7 @@ class Instruction:
                 # print(var.value)
                 if not self.frames.exists(self.operands[0].value):
                     if var.frame == 'GF':
-                            self.frames.add_to_glob(var)
+                        self.frames.add_to_glob(var)
                     elif var.frame == 'TF' and self.frames.temp is not None:
                         if var not in self.frames.temp:
                             self.frames.add_to_temp(var)
@@ -369,18 +368,18 @@ class Instruction:
                             exit(52)
                     else:
                         print("error can add var only to tf or gf ", file=sys.stderr)
-                        exit(55)  # todo
+                        exit(56)  # todo
                 else:
-                  exit(52)
+                    exit(52)
                 self.jumper.current += 1
 
             case 'CALL':
                 self.expected = ['label']
                 self.check_operands()
-                if self.operands[0]. type != 'label':
+                if self.operands[0].type != 'label':
                     exit(53)
 
-                value1 = self.operands[0].value # get label name
+                value1 = self.operands[0].value  # get label name
 
                 where_to_jump_back = self.jumper.current + 1  # where will we continue after return
                 self.jumper.jump_back.insert(0, where_to_jump_back)  # STORE IT IN STACK
@@ -454,7 +453,6 @@ class Instruction:
 
                 if type1 != type2 or type1 != 'int' or type1 is None:
                     exit(53)
-
 
                 result = int(value1) - int(value2)
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result, 'int')
@@ -552,8 +550,6 @@ class Instruction:
 
                 if (type1 != type2) and (type1 != 'nil' and type2 != 'nil'):
                     exit(53)
-
-
 
                 if type1 == 'int':
                     if value2 == 'nil':
@@ -712,29 +708,31 @@ class Instruction:
                 self.expected = ['var', 'type']
                 self.check_operands()
 
-                try:
-                    if self.input is None:
-                        load = input(sys.stdin.buffer)
-                    else:
-                        load = input(self.input)
+                type2 = self.operands[1].value
 
-                    type = self.operands[1].value
-                    print(f"type is  {type}", file=sys.stderr)
-                    if type == 'int':
-                        result = int(load)
-                    elif type == 'bool':
-                        if load != 'true':
-                            result = 'false'
-                        else:
-                            result = load
-                    else:
-                        result = load
+                if self.input is None:
+                    line = input(sys.stdin.buffer)
+                else:
+                    line = self.input[self.jumper.input_index]
+                    self.jumper.input_index += 1
 
-                except EOFError:
-                    result = ''
+                print(f"line is  {self.jumper.input_index}", file=sys.stderr)
+                print(f"line is  {line}", file=sys.stderr)
+                print(f"type is  {type2}", file=sys.stderr)
+
+                if type == 'int':
+                    result = int(line)
+                elif type == 'bool':
+                    if line != 'true':
+                        result = 'false'
+                    else:
+                        result = line
+                else:
+                    result = line
 
                 print(f"result is  {result}", file=sys.stderr)
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result, 'type')
+                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result, type2)
+
 
                 self.jumper.current += 1
 
@@ -799,7 +797,7 @@ class Instruction:
                 if type1 != 'string' or type2 != 'int':
                     exit(53)
 
-                if int(value2) >= len(value1):
+                if int(value2) >= len(value1) or int(value2) < 0:
                     print("value out of range", file=sys.stderr)
                     exit(58)
 
@@ -934,7 +932,6 @@ class Instruction:
                 if int(value1) < 0 or int(value1) > 49:
                     exit(57)
 
-
                 os._exit(int(value1))
 
             case 'DPRINT':
@@ -956,7 +953,7 @@ class Instruction:
 
 
 class Read_source:
-    def __init__(self, source_file, frames, labels, datastack, input_file, jumper):
+    def __init__(self, source_file, frames, labels, datastack, input_file, jumper, input):
         self.root = None
         self.source = source_file
         self.input_file = input_file
@@ -964,17 +961,22 @@ class Read_source:
         self.labels = labels
         self.datastack = datastack
         self.jumper = jumper
+        self.input = input
 
     def load(self):
+        source_file = self.source
+        print(f"source {source_file}", file=sys.stderr)
+
         if self.source is None:
             try:
-                parser = ET.parse(sys.stdin.buffer)
+                parser = ET.parse(sys.stdin)
             except ET.ParseError:
                 print("error while reading xml", file=sys.stderr)
                 exit(31)
         else:
+
             try:
-                parser = ET.parse(self.source)
+                parser = ET.parse(str(self.source))
             except ET.ParseError:
                 print("error while reading xml here ", file=sys.stderr)
                 exit(31)
@@ -1065,7 +1067,7 @@ class Read_source:
                     exit(31)
 
             new_int = Instruction(order, opcode, operands, self.frames, self.labels, self.input_file,
-                                  self.datastack, self.jumper)
+                                  self.datastack, self.jumper, self.input)
             instruction_list.append(new_int)
 
             order_arr = []
@@ -1092,6 +1094,7 @@ class Jumper:
         self.current = 0
         self.jump_back = []
         self.labels = {}
+        self.input_index = 0
 
     def extract_labels(self, in_list):
         for i in in_list:
@@ -1116,7 +1119,7 @@ class Interpreter:
 
     def main(self):
         jumper = Jumper()
-        xml = Read_source(self.source, self.frames, self.labels, self.datastack, self.in_list, jumper)
+        xml = Read_source(self.source, self.frames, self.labels, self.datastack, self.in_list, jumper, self.input)
         xml.load()
         xml.check()
         self.in_list = xml.fill_list()
@@ -1135,7 +1138,7 @@ class Interpreter:
             if instruction is None:
                 break
             else:
-                #instruction.debug()
+                # instruction.debug()
                 instruction.execute()
 
 
@@ -1148,15 +1151,29 @@ parser.add_argument('--input', action='store', dest='input_file',
                     help='soubor se vstupy pro samotnou interpretaci')
 args = parser.parse_args()
 
+input_content = None
+lines = None
 if args.source_file is not None or args.input_file is not None:
     if args.source_file:
         if not os.path.isfile(args.source_file):
             exit(11)
-    if args.input_file:
+
+    if args.input_file is not None:
         if not os.path.isfile(args.input_file):
             exit(11)
+        try:
+            input_content = open(args.input_file)
+        except Exception:
+            exit(12)
+        try:
+            lines = input_content.read().splitlines()
+        except EOFError:
+            lines = None
+            exit(11)
+
 else:
+    lines = None
     exit(11)
 
-interpret = Interpreter(args.source_file, args.input_file)
+interpret = Interpreter(args.source_file, lines)
 interpret.main()
