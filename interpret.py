@@ -256,35 +256,12 @@ class Instruction:
                     exit(54)
 
                 if o.type == 'string':
-                    # print("string before processing " + o.value, file=sys.stderr)
-                    escapePattern = re.compile(r'(\\[0-9]{3})', re.UNICODE)
+                    # print("string before processing " + o.value, file=sys.stderr
 
-                    parts = escapePattern.split(o.value)
-                    value = ''
+                    if o.value is not None:
+                        o.value = replace_unicode_escape_sequences(o.value)
 
-                    html_escape_table = {
-                        "&": "&amp;",
-                        '"': "&quot;",
-                        "'": "&apos;",
-                        ">": "&gt;",
-                        "<": "&lt;",
-                        " ": "",
-                        "\\": "",
-                        "#": "",
-                    }
-
-                    for part in parts:
-                        if escapePattern.match(part):
-                            part = chr(int(part[1:]))  # From \065 -> 065 -> 65 -> A
-
-                        value += part
-
-                    for c in value:
-                        if c in html_escape_table:
-                            value.replace(c, html_escape_table[c])
-
-                    o.value = value
-                # print("string after processing" + o.value, file=sys.stderr)
+                    # print("string after processing" + o.value, file=sys.stderr)
 
     def debug(self):
         print(self.opcode, end=" ", file=sys.stderr)
@@ -759,7 +736,10 @@ class Instruction:
 
                 if type1 != 'string' or type2 != 'string':
                     exit(53)
-
+                if value1 is None:
+                    value1 = ''
+                if value2 is None:
+                    value2 = ''
                 result = value1 + value2
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result, 'string')
 
@@ -1140,6 +1120,44 @@ class Interpreter:
             else:
                 # instruction.debug()
                 instruction.execute()
+def replace_unicode_escape_sequences(s):
+    """
+    Replaces Unicode escape sequences in a string with their corresponding characters.
+    :param s: The input string
+    :return: The string with Unicode escape sequences replaced
+    """
+    import re
+
+    # Regular expression pattern to match Unicode escape sequences
+    pattern = r'\\u[0-9a-fA-F]{4}'
+    html_escape_table = {
+        "&": "&amp;",
+        '"': "&quot;",
+        "'": "&apos;",
+        ">": "&gt;",
+        "<": "&lt;",
+        " ": "",
+        "\\\\": "",
+        "#": "",
+    }
+
+    def replace_unicode(match):
+        """
+        Callback function to replace a matched Unicode escape sequence with its corresponding character.
+        """
+        escape_sequence = match.group(0)
+        unicode_char = chr(int(escape_sequence[2:], 16))
+        return unicode_char
+
+
+    # Use regex to find all Unicode escape sequences and replace them
+    result = re.sub(pattern, replace_unicode, s)
+    for c in result:
+        if c in html_escape_table:
+            result.replace(c, html_escape_table[c])
+
+
+    return result
 
 
 parser = argparse.ArgumentParser(
