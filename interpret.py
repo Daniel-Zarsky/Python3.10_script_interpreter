@@ -482,10 +482,18 @@ class Instruction:
                 type1 = self.get_op_type(1)
                 type2 = self.get_op_type(2)
 
-                if type1 != type2:
+                if (type1 != type2):
                     exit(53)
 
-                result = value1 < value2
+
+                if (type1 == 'nil') or (type2 == 'nil'):
+                    exit(53)
+
+                if (type1 == 'int'):
+                    result = int(value1) < int(value2)
+                else:
+                    result = value1 < value2
+
                 if result is True:
                     result = 'true'
                 else:
@@ -504,15 +512,21 @@ class Instruction:
                 type1 = self.get_op_type(1)
                 type2 = self.get_op_type(2)
 
-                if type1 != type2 or (type1 == 'nil' or type2 == 'nil'):
+                if (type1 != type2):
                     exit(53)
 
-                result = value1 > value2
+                if (type1 == 'nil') or (type2 == 'nil'):
+                    exit(53)
+
+                if (type1 == 'int'):
+                    result = int(value1) > int(value2)
+                else:
+                    result = value1 > value2
+
                 if result is True:
                     result = 'true'
                 else:
                     result = 'false'
-                print(f"value 2 {value2} ", file=sys.stderr)
                 self.frames.set_value(self.operands[0].frame, self.operands[0].value, result, 'bool')
 
                 self.jumper.current += 1
