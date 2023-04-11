@@ -54,12 +54,12 @@ class Frames:
         self.locals = 0
 
     def debug(self):
-        print('temp', file=sys.stderr )
-        print(self.temp,  file=sys.stderr)
-        print('glob',  file=sys.stderr)
-        print(self.glob,  file=sys.stderr)
-        print('top local',  file=sys.stderr)
-        print(self.local,  file=sys.stderr)
+        print('temp', file=sys.stderr)
+        print(self.temp, file=sys.stderr)
+        print('glob', file=sys.stderr)
+        print(self.glob, file=sys.stderr)
+        print('top local', file=sys.stderr)
+        print(self.local, file=sys.stderr)
 
     def createframe(self):
         self.temp = {}
@@ -82,7 +82,7 @@ class Frames:
     def add_to_local(self, variable):
 
         self.defined[variable.name] = variable
-        new_var ={variable.name : variable}
+        new_var = {variable.name: variable}
         self.local[0].update(new_var)
 
     def pushframe(self):
@@ -118,9 +118,6 @@ class Frames:
             if len(self.local) > 0:
                 if name in self.local[0]:
                     return True
-
-
-
 
         return False
 
@@ -171,9 +168,9 @@ class Frames:
                     print("value undefined", file=sys.stderr)
                     exit(54)
                 else:
-                    #print("got value", file=sys.stderr)
-                    value4 =self.local[0][name].get_value()
-                    #print(f"got value {value4}", file=sys.stderr)
+                    # print("got value", file=sys.stderr)
+                    value4 = self.local[0][name].get_value()
+                    # print(f"got value {value4}", file=sys.stderr)
                     return self.local[0][name].get_value()
 
             else:
@@ -214,9 +211,9 @@ class Frames:
         elif frame == 'LF':
             if name in self.local[0]:
                 self.local[0][name].set_value(value, type)
-                #print(f"value set {value}", file=sys.stderr)
+                # print(f"value set {value}", file=sys.stderr)
                 value2 = self.local[0][name].get_value()
-                #print(f"value actual {value2}", file=sys.stderr)
+                # print(f"value actual {value2}", file=sys.stderr)
             else:
                 print("tu", file=sys.stderr)
                 exit(54)
@@ -274,8 +271,6 @@ class Instruction:
         for o in self.operands:
             if o is not None:
                 if o.type == 'var' and (not self.frames.can_access(self.opcode, o.value, o.frame)):
-
-
                     exit(54)
 
                 if o.type == 'string':
@@ -383,7 +378,7 @@ class Instruction:
             case 'CALL':
                 self.expected = ['label']
                 self.check_operands()
-                if self.operands[0].type != 'label': # typ je label
+                if self.operands[0].type != 'label':  # typ je label
                     exit(53)
 
                 value1 = self.operands[0].value  # label existuje
@@ -394,7 +389,7 @@ class Instruction:
                 where_to_jump_back = self.jumper.current + 1  # where will we continue after return
                 self.jumper.jump_back.insert(0, where_to_jump_back)  # STORE IT IN STACK
 
-                #print(f"jump_back {self.jumper.jump_back}", file=sys.stderr)
+                # print(f"jump_back {self.jumper.jump_back}", file=sys.stderr)
                 self.jumper.current = self.jumper.labels[value1]  # SET CURRENT TO LABEL ORDER VALUE
 
             case 'RETURN':
@@ -732,19 +727,26 @@ class Instruction:
                     line = input(sys.stdin.buffer)
                 else:
                     line = self.input[self.jumper.input_index]
+
+                if self.jumper.input_index < (len(self.input) - 1):
                     self.jumper.input_index += 1
 
                 print(f"line is  {self.jumper.input_index}", file=sys.stderr)
                 print(f"line is  {line}", file=sys.stderr)
                 print(f"type is  {type2}", file=sys.stderr)
 
-                if type == 'int':
-                    result = int(line)
-                elif type == 'bool':
-                    if line != 'true':
-                        result = 'false'
+                if type2 == 'int':
+                    if re.match(r'^(-)?[0-9]\d*$', str(line)):
+                        result = int(line)
                     else:
+                        result = 'nil'
+                        type2 = 'nil'
+                elif type2 == 'bool':
+                    if re.match(r'^(true)$', str(line), re.IGNORECASE):
                         result = 'true'
+                    else:
+                        result = 'false'
+
                 else:
                     result = line
 
@@ -993,7 +995,7 @@ class Read_source:
 
     def load(self):
         source_file = self.source
-        #print(f"source {source_file}", file=sys.stderr)
+        # print(f"source {source_file}", file=sys.stderr)
 
         if self.source is None:
             try:
@@ -1166,13 +1168,13 @@ class Interpreter:
 
         while jumper.current < len(self.in_list):
 
-            #jumper.debug()
+            # jumper.debug()
             # self.frames.debug()
             # print(self.datastack)
             instruction = self.in_list[jumper.current]
-           # print(instruction.order, end='')
-            #print(instruction.opcode)
-            #print(instruction.opcode, file=sys.stderr)
+            # print(instruction.order, end='')
+            # print(instruction.opcode)
+            # print(instruction.opcode, file=sys.stderr)
             # print(instruction.opcode)
             if instruction is None:
                 break
