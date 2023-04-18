@@ -6,28 +6,30 @@ import os
 
 
 class Variable:
+    """
+    Class represents a variable
+    General management of variables ensures class Frames
+    """
     def __init__(self, frame, name):
+        """constructor"""
         self.value = None
         self.frame = frame
         self.name = name
         self.type = None
 
-    def get_frame(self):  # check when reading value from input
-        return self.frame
-
-    def get_value(self):  # check when reading value from input
+    def get_value(self):
+        """"returns value of variable"""
         if self.value is None:
             print("value undefined", file=sys.stderr)
             exit(56)
         return self.value
 
     def get_type(self):
+        """"returns type of variable"""
         return self.type
 
-    def get_name(self):  # check when reading value from input
-        return self.name
-
     def set_value(self, value, type):
+        """"set value of variable based on it's type"""
         self.value = value
         if type is None:
             if re.match(r'^[0-9]+$', str(value)):
@@ -46,47 +48,42 @@ class Variable:
 
 
 class Frames:
+    """
+    Class Frames is in charge of storing variables
+
+    """
     def __init__(self):
+        """constructor"""
         self.local = []
         self.temp = None
         self.glob = {}
-        self.defined = {}
         self.locals = 0
 
-    def debug(self):
-        print('temp', file=sys.stderr)
-        print(self.temp, file=sys.stderr)
-        print('glob', file=sys.stderr)
-        print(self.glob, file=sys.stderr)
-        print('top local', file=sys.stderr)
-        print(self.local, file=sys.stderr)
-
     def createframe(self):
+        """initializes temporary frame"""
         self.temp = {}
 
     def add_to_temp(self, variable):
+        """adds variable to temporary frame"""
         if self.temp is None:
             print("empty temporary", file=sys.stderr)
             exit(55)
 
-        self.defined[variable.name] = variable
         self.temp[variable.name] = variable
 
-    # print(self.temp)
-
     def add_to_glob(self, variable):
+        """adds variable to global frame"""
 
-        self.defined[variable.name] = variable
         self.glob[variable.name] = variable
 
     def add_to_local(self, variable):
+        """adds variable to local frame"""
 
-        self.defined[variable.name] = variable
         new_var = {variable.name: variable}
         self.local[0].update(new_var)
 
     def pushframe(self):
-
+        """moves temporary frame to local frame"""
         if self.temp is None:
             print("empty temporary", file=sys.stderr)
             exit(55)
@@ -96,6 +93,7 @@ class Frames:
         self.temp = None
 
     def popframe(self):
+        """moves top local frame to temporary frame """
         if len(self.local) == 0:
             print("empty local", file=sys.stderr)
             exit(55)
@@ -104,7 +102,9 @@ class Frames:
         self.temp = self.local[0]
         del self.local[0]
 
-    def exists(self, name, frame):  # for defvar checking
+    def exists(self, name, frame):
+        """checks whether the variable was declared """
+
         if frame == 'GF':
             if name in self.glob:
                 print("je v globalu ", file=sys.stderr)
@@ -122,7 +122,7 @@ class Frames:
         return False
 
     def can_access(self, opcode, name, frame):
-
+        """checks whether the caller of this function can access the variable """
         if opcode == 'DEFVAR' or opcode == 'TYPE':
             return True
         else:
@@ -152,9 +152,10 @@ class Frames:
                     return False
             else:
                 print("wrong frame can_access", file=sys.stderr)
-                exit(32)  # todo
+                exit(32)
 
     def get_value(self, name, frame):
+        """ returns value of a variable """
         if frame == 'GF':
 
             if name not in self.glob:
@@ -168,9 +169,6 @@ class Frames:
                     print("value undefined", file=sys.stderr)
                     exit(54)
                 else:
-                    # print("got value", file=sys.stderr)
-                    value4 = self.local[0][name].get_value()
-                    # print(f"got value {value4}", file=sys.stderr)
                     return self.local[0][name].get_value()
 
             else:
@@ -190,9 +188,11 @@ class Frames:
 
         else:
             print("wrong frame get value", file=sys.stderr)
-            exit(32)  # todo
+            exit(32)
 
     def get_type(self, name, frame):
+        """returns type of variable """
+
         if frame == 'GF':
             return self.glob[name].get_type()
         elif frame == 'LF':
@@ -201,38 +201,40 @@ class Frames:
             return self.temp[name].get_type()
 
     def set_value(self, frame, name, value, type):
-
+        """ set value of a variable """
         if frame == 'GF':
-            if name in self.glob:
-                self.glob[name].set_value(value, type)
-            else:
-                print("tady", file=sys.stderr)
-                exit(54)
+            if len(self.glob) != 0:
+                if name in self.glob:
+                    self.glob[name].set_value(value, type)
+                else:
+                    print("variale not in global", file=sys.stderr)
+                    exit(54)
+
         elif frame == 'LF':
-            if name in self.local[0]:
-                self.local[0][name].set_value(value, type)
-                # print(f"value set {value}", file=sys.stderr)
-                value2 = self.local[0][name].get_value()
-                # print(f"value actual {value2}", file=sys.stderr)
-            else:
-                print("tu", file=sys.stderr)
-                exit(54)
+            if len(self.local) > 0:
+                if name in self.local[0]:
+                    self.local[0][name].set_value(value, type)
+                else:
+                    print("variale not in local", file=sys.stderr)
+                    exit(54)
+
         elif frame == 'TF':
             if self.temp is not None:
                 if name in self.temp:
                     self.temp[name].set_value(value, type)
                 else:
-                    print("tudy", file=sys.stderr)
+                    print("variable not in temporary ", file=sys.stderr)
                     exit(54)
             else:
                 print("temporary not exists", file=sys.stderr)
-                exit(55)  # todo
+                exit(55)
         else:
             print("wrong frame set value", file=sys.stderr)
-            exit(32)  # todo
+            exit(32)
 
 
 class Operand:
+    """class represents one operand of an instruction """
     def __init__(self, type, value, frame):
         self.type = type
         self.value = value
@@ -240,6 +242,7 @@ class Operand:
 
 
 class Instruction:
+    """class represents instruction of IPPcode23"""
     def __init__(self, order, opcode, operands, frames, labels, input_file, datastack, jumper, input):
         self.order = order
         self.opcode = opcode
@@ -253,7 +256,7 @@ class Instruction:
         self.expected = None  # expected types of arguments
 
     def check_operands(self):
-        # self.debug()
+        """checks if the operands of an instruction are valid """
 
         op_count = 0
         for j in self.operands:
@@ -282,16 +285,10 @@ class Instruction:
                     o.value = replace_unicode_escape_sequences(o.value)
                     print("string after processing" + o.value, file=sys.stderr)
 
-    def debug(self):
-        print(self.opcode, end=" ", file=sys.stderr)
-        print(self.order, file=sys.stderr)
-        for i in self.operands:
-            if i is not None:
-                print(i.type, end=" ", file=sys.stderr)
-                print(i.frame, end=" ", file=sys.stderr)
-                print(i.value, file=sys.stderr)
 
     def get_op_val(self, number):
+        """returns value of an operand"""
+
         if self.operands[number] is not None:
             if self.operands[number].type == 'var':
                 value = self.frames.get_value(self.operands[number].value, self.operands[number].frame)
@@ -301,9 +298,10 @@ class Instruction:
             return value
         else:
             print("wrong operand number ", file=sys.stderr)
-            exit(55)  # todo
+            exit(55)
 
     def get_op_type(self, number):
+        """returns type of an operand"""
         if self.operands[number] is not None:
             if self.operands[number].type == 'var':
                 type = self.frames.get_type(self.operands[number].value, self.operands[number].frame)
@@ -316,6 +314,8 @@ class Instruction:
             exit(55)  # todo
 
     def execute(self):
+        """executes the instruction based on it's opcede and operands"""
+
         match self.opcode.upper():
             case 'MOVE':
 
@@ -329,7 +329,6 @@ class Instruction:
                 self.jumper.current += 1
 
             case 'CREATEFRAME':
-                # print('xreatefrafe')
                 self.expected = []
                 self.check_operands()
                 self.frames.createframe()
@@ -353,7 +352,6 @@ class Instruction:
                 self.expected = ['var']
                 self.check_operands()
                 var = Variable(self.operands[0].frame, self.operands[0].value)
-                # print(var.value)
                 if not self.frames.exists(self.operands[0].value, self.operands[0].frame):
                     if var.frame == 'GF':
                         self.frames.add_to_glob(var)
@@ -389,7 +387,6 @@ class Instruction:
                 where_to_jump_back = self.jumper.current + 1  # where will we continue after return
                 self.jumper.jump_back.insert(0, where_to_jump_back)  # STORE IT IN STACK
 
-                # print(f"jump_back {self.jumper.jump_back}", file=sys.stderr)
                 self.jumper.current = self.jumper.labels[value1]  # SET CURRENT TO LABEL ORDER VALUE
 
             case 'RETURN':
@@ -724,34 +721,52 @@ class Instruction:
                 type2 = self.operands[1].value
 
                 if self.input is None:
-                    line = input(sys.stdin.buffer)
+                    try:
+                        line = input(sys.stdin.buffer)
+                        if type2 == 'int':
+                            if re.match(r'^(-)?[0-9]\d*$', str(line)):
+                                result = int(line)
+                            else:
+                                result = 'nil'
+                                type2 = 'nil'
+                        elif type2 == 'bool':
+
+                            if re.match(r'^(true)$', str(line), re.IGNORECASE):
+                                result = 'true'
+                            else:
+                                result = 'false'
+
+                        else:
+                            result = line
+
+                        print(f"result is  {result}", file=sys.stderr)
+                        self.frames.set_value(self.operands[0].frame, self.operands[0].value, result, type2)
+                    except EOFError:
+                        self.frames.set_value(self.operands[0].frame, self.operands[0].value, 'nil', 'nil')
+
                 else:
                     line = self.input[self.jumper.input_index]
+                    if type2 == 'int':
+                        if re.match(r'^(-)?[0-9]\d*$', str(line)):
+                            result = int(line)
+                        else:
+                            result = 'nil'
+                            type2 = 'nil'
+                    elif type2 == 'bool':
+
+                        if re.match(r'^(true)$', str(line), re.IGNORECASE):
+                            result = 'true'
+                        else:
+                            result = 'false'
+
+                    else:
+                        result = line
+
+                    print(f"result is  {result}", file=sys.stderr)
+                    self.frames.set_value(self.operands[0].frame, self.operands[0].value, result, type2)
 
                 if self.jumper.input_index < (len(self.input) - 1):
                     self.jumper.input_index += 1
-
-                print(f"line is  {self.jumper.input_index}", file=sys.stderr)
-                print(f"line is  {line}", file=sys.stderr)
-                print(f"type is  {type2}", file=sys.stderr)
-
-                if type2 == 'int':
-                    if re.match(r'^(-)?[0-9]\d*$', str(line)):
-                        result = int(line)
-                    else:
-                        result = 'nil'
-                        type2 = 'nil'
-                elif type2 == 'bool':
-                    if re.match(r'^(true)$', str(line), re.IGNORECASE):
-                        result = 'true'
-                    else:
-                        result = 'false'
-
-                else:
-                    result = line
-
-                print(f"result is  {result}", file=sys.stderr)
-                self.frames.set_value(self.operands[0].frame, self.operands[0].value, result, type2)
 
                 self.jumper.current += 1
 
@@ -983,6 +998,7 @@ class Instruction:
 
 
 class Read_source:
+    """helper class for interpret, it is in charge trnasformin xml to loist of instructions"""
     def __init__(self, source_file, frames, labels, datastack, input_file, jumper, input):
         self.root = None
         self.source = source_file
@@ -994,9 +1010,7 @@ class Read_source:
         self.input = input
 
     def load(self):
-        source_file = self.source
-        # print(f"source {source_file}", file=sys.stderr)
-
+        """creates xml tree structure"""
         if self.source is None:
             try:
                 parser = ET.parse(sys.stdin)
@@ -1016,10 +1030,10 @@ class Read_source:
         return self.root
 
     def check(self):
+        """basick check of xml structure"""
 
         try:
             if self.root.attrib['language'].upper() != "IPPcode23".upper():  # name a description nekotroluju kdyz
-                # jsou volitelne
                 print("error while reading xml", file=sys.stderr)
                 exit(32)
         except KeyError:
@@ -1050,7 +1064,7 @@ class Read_source:
                     exit(31)
 
     def fill_list(self):
-
+        """creates a list of instructions for further processing in interpret"""
         instruction_list = []
         for child in self.root:
 
@@ -1108,7 +1122,6 @@ class Read_source:
                     print("duplicate order", file=sys.stderr)
                     exit(32)
 
-            # instruction_list.sort(key=lambda x: x.order, reverse=False)
             instruction_list = sorted(instruction_list, key=lambda x: x.order, reverse=False)
 
         right_order = 0
@@ -1120,19 +1133,13 @@ class Read_source:
 
 
 class Jumper:
+    """class is in charge of keeping the data about flow control"""
     def __init__(self):
         self.current = 0
         self.jump_back = []
         self.labels = {}
         self.input_index = 0
 
-    def debug(self):
-        print("current")
-        print(self.current)
-        print('labels')
-        print(self.labels)
-        print("jump back")
-        print(self.jump_back)
 
     def extract_labels(self, in_list):
         for i in in_list:
@@ -1145,7 +1152,7 @@ class Jumper:
 
 
 class Interpreter:
-
+    """main class managing all the tasks in interpretatin"""
     def __init__(self, source_file, input_file):
         self.source = source_file
         self.input = input_file
@@ -1156,6 +1163,7 @@ class Interpreter:
         self.labels = []
 
     def main(self):
+        """managing the interpretation"""
         jumper = Jumper()
         xml = Read_source(self.source, self.frames, self.labels, self.datastack, self.in_list, jumper, self.input)
         xml.load()
@@ -1164,62 +1172,28 @@ class Interpreter:
 
         jumper.extract_labels(self.in_list)
 
-        # print(jumper.labels)
-
         while jumper.current < len(self.in_list):
 
-            # jumper.debug()
-            # self.frames.debug()
-            # print(self.datastack)
             instruction = self.in_list[jumper.current]
-            # print(instruction.order, end='')
-            # print(instruction.opcode)
-            # print(instruction.opcode, file=sys.stderr)
-            # print(instruction.opcode)
             if instruction is None:
                 break
             else:
-                # instruction.debug()
                 instruction.execute()
 
 
 def replace_unicode_escape_sequences(s):
-    """
-    Replaces Unicode escape sequences in a string with their corresponding characters.
-    :param s: The input string
-    :return: The string with Unicode escape sequences replaced
-    """
-    import re
-
-    # Regular expression pattern to match Unicode escape sequences
+    """helper function for thansforming xml strings to it's real value"""
     pattern = r'\\[0-9]{3}'
-    html_escape_table = {
-        "&": "&amp;",
-        '"': "&quot;",
-        "'": "&apos;",
-        ">": "&gt;",
-        "<": "&lt;",
-        " ": "",
-        "\\": "",
-        "#": "",
-    }
 
     def replace_unicode(match):
-        """
-        Callback function to replace a matched Unicode escape sequence with its corresponding character.
-        """
         escape_sequence = match.group(0)
         unicode_char = chr(int(escape_sequence[2:], 10))
         return unicode_char
 
-    # Use regex to find all Unicode escape sequences and replace them
     result = re.sub(pattern, replace_unicode, s)
-    for c in result:
-        if c in html_escape_table:
-            result.replace(c, html_escape_table[c])
-
     return result
 
+"""Starting of the program and loading arguments """
 
 parser = argparse.ArgumentParser(
     prog='interpret.py',
