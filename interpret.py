@@ -996,22 +996,47 @@ class Instruction:
                 print("wrong opcode", file=sys.stderr)
                 exit(32)
 
-
-class Read_source:
-    """helper class for interpret, it is in charge trnasformin xml to loist of instructions"""
-    def __init__(self, source_file, frames, labels, datastack, input_file, jumper, input):
-        self.root = None
-        self.source = source_file
+class Interpreter:
+    """main class managing all the tasks in interpretatin"""
+    def __init__(self, source_file, input_file):
+        self.source_file = source_file
         self.input_file = input_file
-        self.frames = frames
-        self.labels = labels
-        self.datastack = datastack
+        self.in_list = []
+        self.frames = Frames()
+        self.datastack = []
+        self.labels = []
+
+
+
+    def main(self):
+        """managing the interpretation"""
+        jumper = Jumper()
+        xml = Read_source(jumper, self.source_file, self.input_file)
+        xml.load()
+        xml.check()
+        self.in_list = xml.fill_list()
+
+        jumper.extract_labels(self.in_list)
+
+        while jumper.current < len(self.in_list):
+
+            instruction = self.in_list[jumper.current]
+            if instruction is None:
+                break
+            else:
+                instruction.execute()
+
+class Read_source(Interpreter):
+    """helper class for interpret, it is in charge trnasformin xml to loist of instructions"""
+    def __init__(self, jumper, source_file, input_file):
+        super().__init__(source_file, input_file)
+        self.root = None
         self.jumper = jumper
-        self.input = input
+
 
     def load(self):
         """creates xml tree structure"""
-        if self.source is None:
+        if self.source_file is None:
             try:
                 parser = ET.parse(sys.stdin)
             except ET.ParseError:
@@ -1020,7 +1045,7 @@ class Read_source:
         else:
 
             try:
-                parser = ET.parse(str(self.source))
+                parser = ET.parse(str(self.source_file))
             except ET.ParseError:
                 print("error while reading xml here ", file=sys.stderr)
                 exit(31)
@@ -1111,7 +1136,7 @@ class Read_source:
                     exit(31)
 
             new_int = Instruction(order, opcode, operands, self.frames, self.labels, self.input_file,
-                                  self.datastack, self.jumper, self.input)
+                                  self.datastack, self.jumper, self.input_file)
             instruction_list.append(new_int)
 
             order_arr = []
@@ -1150,37 +1175,6 @@ class Jumper:
                     print("label redefinition", file=sys.stderr)
                     exit(52)
 
-
-class Interpreter:
-    """main class managing all the tasks in interpretatin"""
-    def __init__(self, source_file, input_file):
-        self.source = source_file
-        self.input = input_file
-        self.in_list = []
-        self.in_cnt = 0
-        self.frames = Frames()
-        self.datastack = []
-        self.labels = []
-
-    def main(self):
-        """managing the interpretation"""
-        jumper = Jumper()
-        xml = Read_source(self.source, self.frames, self.labels, self.datastack, self.in_list, jumper, self.input)
-        xml.load()
-        xml.check()
-        self.in_list = xml.fill_list()
-
-        jumper.extract_labels(self.in_list)
-
-        while jumper.current < len(self.in_list):
-
-            instruction = self.in_list[jumper.current]
-            if instruction is None:
-                break
-            else:
-                instruction.execute()
-
-
 def replace_unicode_escape_sequences(s):
     """helper function for thansforming xml strings to it's real value"""
     pattern = r'\\[0-9]{3}'
@@ -1192,6 +1186,7 @@ def replace_unicode_escape_sequences(s):
 
     result = re.sub(pattern, replace_unicode, s)
     return result
+
 
 """Starting of the program and loading arguments """
 
